@@ -932,9 +932,6 @@ decode_extended_utf8 :: proc(r: ^Reader) -> (decoded_num: u64, err: Error) {
 
     decoded_num = u64(0)
 
-    fmt.println("cur offset", r.i)
-    fmt.println("cur offset bits", r.bits_read_in_byte)
-
     first_byte := read_byte(r) or_return
     utf8_sequence_len := 0
 
@@ -947,37 +944,25 @@ decode_extended_utf8 :: proc(r: ^Reader) -> (decoded_num: u64, err: Error) {
         }
     }
 
-    fmt.println("seq len:", utf8_sequence_len)
-
     if utf8_sequence_len > 0 {
         octets := make([dynamic]byte, 0, 8)
         for i := utf8_sequence_len - 1; i > 0; i -= 1 {
             append(&octets, read_byte(r) or_return)
         }
 
-        // TODO: Implement the rest of the utf8 seq len
         switch utf8_sequence_len {
             case 2:
-            fmt.printfln("first utf8 byte:0x%X", first_byte & MASK2)
-                fmt.printfln("second utf8 byte:0x%X", octets[0] & MASKX)
                 decoded_num = (u64(first_byte) & MASK2) << 6 | (u64(octets[0]) & MASKX)
             case 3:
-                fmt.printfln("first utf8 byte:0x%X", first_byte & MASK3)
-                fmt.printfln("second utf8 byte:0x%X", octets[0] & MASKX)
-                fmt.printfln("third utf8 byte:0x%X", octets[1] & MASKX)
                 decoded_num = (u64(first_byte) & MASK3) << 12 | (u64(octets[0]) & MASKX) << 6 | (u64(octets[1]) & MASKX)
             case 4:
-                fmt.printfln("first utf8 byte:0x%X", first_byte & MASK4)
-                fmt.printfln("second utf8 byte:0x%X", octets[0] & MASKX)
-                fmt.printfln("third utf8 byte:0x%X", octets[1] & MASKX)
-                fmt.printfln("fourth utf8 byte:0x%X", octets[2] & MASKX)
-                decoded_num = (u64(first_byte) & MASK3) << 18 | (u64(octets[0]) & MASKX) << 12 | (u64(octets[1]) & MASKX) << 6 | (u64(octets[0]) & MASKX)
+                decoded_num = (u64(first_byte) & MASK4) << 18 | (u64(octets[0]) & MASKX) << 12 | (u64(octets[1]) & MASKX) << 6 | (u64(octets[2]) & MASKX)
             case 5:
-                return 0, .Unimplemented_Utf8
+                decoded_num = (u64(first_byte) & MASK5) << 24 | (u64(octets[0]) & MASKX) << 18 | (u64(octets[1]) & MASKX) << 12 | (u64(octets[2]) & MASKX) << 6 | (u64(octets[3]) & MASKX)
             case 6:
-                return 0, .Unimplemented_Utf8
+                decoded_num = (u64(first_byte) & MASK6) << 30 | (u64(octets[0]) & MASKX) << 24 | (u64(octets[1]) & MASKX) << 18 | (u64(octets[2]) & MASKX) << 12 | (u64(octets[3]) & MASKX) << 6 | (u64(octets[4]) & MASKX)
             case 7:
-                return 0, .Unimplemented_Utf8
+                decoded_num = (u64(octets[0]) & MASKX) << 30 | (u64(octets[1]) & MASKX) << 24 | (u64(octets[2]) & MASKX) << 18 | (u64(octets[3]) & MASKX) << 12 | (u64(octets[4]) & MASKX) << 6 | (u64(octets[5]) & MASKX)
         }
     } else {
         decoded_num = u64(first_byte & 0x7F)
@@ -1107,6 +1092,7 @@ load_from_bytes :: proc(data: []byte, allocator := context.allocator) -> (err: E
                 }
             case .PICTURE:
                 // TODO: save the pic data into a struct
+								// TODO: maybe put all of these into a struct so we do one big read?
                 pic_type := read_data(&r, PictureType) or_return
                 mime_len := read_data(&r, u32be) or_return
                 mimetype := string(read_slice(&r, auto_cast mime_len) or_return)
