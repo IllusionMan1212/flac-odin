@@ -56,8 +56,8 @@ read_bit :: #force_inline proc(r: ^Reader) -> (bit: byte, err: Error) {
     return b, nil
 }
 
-read_bits :: proc(r: ^Reader, n: int) -> (bits: i64, err: Error) {
-    x: i64 = 0
+read_bits :: proc(r: ^Reader, n: int) -> (bits: u64, err: Error) {
+    x: u64 = 0
 
     for i in 0 ..< n {
         x = 2 * x + auto_cast read_bit(r) or_return
