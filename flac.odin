@@ -9,6 +9,7 @@ import "core:slice"
 import "core:io"
 import "core:os"
 import "core:time"
+import "core:prof/spall"
 
 @(private)
 FLAC_MAGIC :: 'f' << 24 | 'L' << 16 | 'a' << 8 | 'C'
@@ -252,6 +253,15 @@ StreamInfoBlock :: struct #packed {
     md5: [16]byte,
 }
 
+#assert(size_of(PictureMetadata) == 20)
+PictureMetadata :: struct {
+    width: u32be,
+    height: u32be,
+    depth: u32be,
+    num_colors: u32be,
+    data_len: u32be,
+}
+
 #assert(size_of(CueSheet) == 396)
 CueSheet :: struct #packed {
     media_catalog_num: [128]byte,
@@ -285,13 +295,13 @@ CueSheetTrackIndex :: struct #packed {
     reserved: [3]byte,
 }
 
-decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32, err: Error) {
+decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32, err: Error) #no_bounds_check {
     subframe_type_str := ""
     // TODO: temp allocator?? so we copy the slice of data into the _actual_ sample buffer
     // Maybe even a static arena with a size of 32MB by default (and configurable using #config) or something
     // that we then use to allocate from (better perf is the reason because allocating on the heap for every subframe
     // is probably noticibly slower)
-    subframe_samples := make([dynamic]i32, 0, block_size)
+    subframe_samples := make([]i32, block_size)
 
     //fmt.println("SUBFRAME START AT OFFSET:", r.i)
     //fmt.println("SUBFRAME offset bits", r.bits_read_in_byte)
@@ -322,10 +332,11 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
         bits_to_read := int(bps) - wasted_bits
         sample := i32(read_bits(r, bits_to_read) or_return)
         if sample > 0 && (sample >> (uint(bits_to_read) - 1)) & 1 == 1 {
-            sample = -(((~sample) & (i32(math.pow2_f32(bits_to_read)) - 1)) + 1)
+            sample = -(((~sample) & (i32(pow2(bits_to_read)) - 1)) + 1)
         }
         for s in 0..<block_size {
-            append(&subframe_samples, sample)
+            subframe_samples[s] = sample
+            //append(&subframe_samples, sample)
         }
     } else if subframe_type == 1 { // VERBATIM
         //fmt.println("SUBFRAME: VERBATIM")
@@ -352,8 +363,8 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
             //unencoded_subblock_arr := transmute([2]byte)unencoded_subblock
             //fmt.printfln("arr: %X", unencoded_subblock_arr)
             //fmt.printfln("arr as u16: %X", transmute(u16)unencoded_subblock_arr)
-            append(&subframe_samples, unencoded_subblock)
-            //append(&decoded_samples, ..unencoded_subblock_arr[:])
+            //append(&subframe_samples, unencoded_subblock)
+            subframe_samples[sample] = unencoded_subblock
         }
     } else if (subframe_type >> 5) & 1 == 1 { // LPC
         //fmt.println("SUBFRAME: LPC")
@@ -368,13 +379,14 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
             unencoded_warmup_sample := i32(read_bits(r, bits_to_read) or_return)
             // fmt.println("warmup sample:", unencoded_warmup_sample)
             if unencoded_warmup_sample > 0 && (unencoded_warmup_sample >> (uint(bits_to_read) - 1)) & 1 == 1 {
-                unencoded_warmup_sample = -(((~unencoded_warmup_sample) & (i32(math.pow2_f32(bits_to_read)) - 1)) + 1)
+                unencoded_warmup_sample = -(((~unencoded_warmup_sample) & (i32(pow2(bits_to_read)) - 1)) + 1)
             }
 
             //fmt.printfln("unencoded warmup sample: 0b%b", unencoded_warmup_sample)
             //fmt.println("unencoded warmup sample:", unencoded_warmup_sample)
             //fmt.printfln("unencoded warmup sample: 0x%X", unencoded_warmup_sample)
-            append(&subframe_samples, unencoded_warmup_sample)
+            //append(&subframe_samples, unencoded_warmup_sample)
+            subframe_samples[s] = unencoded_warmup_sample
         }
 
         coeff_precision_minus_one := u8(read_bits(r, 4) or_return)
@@ -386,7 +398,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
         coeff_bits_to_shift := i8(read_bits(r, 5) or_return)
         // NOTE: This is signed 2's complement so we check the MSB
         // NOTE: This is apparently supposed to never be a negative number according to the spec.
-		// TODO: For now we just error if the shift value is negative. I have to find test cases to be sure.
+        // TODO: For now we just error if the shift value is negative. I have to find test cases to be sure.
         if (coeff_bits_to_shift >> (5 - 1)) & 1 == 1 {
             //fmt.println("BITS TO SHIFT IS NEGATIVE")
             //coeff_bits_to_shift = -(((~coeff_bits_to_shift) & i8(math.pow2_f32(5) - 1)) + 1)
@@ -402,7 +414,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
             unencoded_coefficient := i32(read_bits(r, int(coeff_precision)) or_return)
             // Ditto
             if unencoded_coefficient > 0 && (unencoded_coefficient >> (coeff_precision - 1)) & 1 == 1 {
-                unencoded_coefficient = -(((~unencoded_coefficient) & (i32(math.pow2_f32(coeff_precision)) - 1)) + 1)
+                unencoded_coefficient = -(((~unencoded_coefficient) & (i32(pow2(coeff_precision)) - 1)) + 1)
             }
             coefficients[i] = unencoded_coefficient
             //fmt.println("unencoded_coefficient", unencoded_coefficient)
@@ -416,7 +428,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
 
         partition_order := read_bits(r, 4) or_return
         //fmt.println("parition order", partition_order)
-        partitions := int(math.pow2_f32(partition_order))
+        partitions := int(pow2(partition_order))
         //fmt.println("partitions:", partitions)
         //fmt.println("block_size:", block_size)
 
@@ -430,14 +442,15 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                 if partition_order == 0 {
                     num_samples = int(block_size - u16(predictor_order))
                 } else if i != 0 {
-                    num_samples = int(block_size / u16(math.pow2_f32(partition_order)))
+                    num_samples = int(block_size / u16(pow2(partition_order)))
                 } else {
-                    num_samples = int((block_size / u16(math.pow2_f32(partition_order))) - u16(predictor_order))
+                    num_samples = int((block_size / u16(pow2(partition_order))) - u16(predictor_order))
                 }
 
                 if unencoded_bps == 0 {
                     for sample in 0..<num_samples {
-                        append(&subframe_samples, i32(0))
+                        subframe_samples[sample_i + int(predictor_order)] = 0
+                        //append(&subframe_samples, i32(0))
                         sample_i += 1
                     }
                     continue lpc_partitions_loop
@@ -449,7 +462,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                     // NOTE: This is signed 2's complement so we check the MSB
                     residual_sample_value := i32(read_bits(r, int(unencoded_bps)) or_return)
                     if residual_sample_value > 0 && (residual_sample_value >> (unencoded_bps - 1)) & 1 == 1 {
-                        residual_sample_value = -(((~residual_sample_value) & (i32(math.pow2_f32(unencoded_bps)) - 1)) + 1)
+                        residual_sample_value = -(((~residual_sample_value) & (i32(pow2(unencoded_bps)) - 1)) + 1)
                     }
 
                     // Restore sample values using the predictor and the residual values
@@ -472,7 +485,8 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
 
                     sample := i32(predictor + int(residual_sample_value))
                     //sample := (i32(predictor) + residual_sample_value)
-                    append(&subframe_samples, sample)
+                    //append(&subframe_samples, sample)
+                    subframe_samples[sample_i + int(predictor_order)] = sample
                     //fmt.printfln("    residual[%d]=%d", sample_i, residual_sample_value)
                     //fmt.printfln("    sample[%d]=%d", sample_i, sample)
                     sample_i += 1
@@ -484,16 +498,15 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                 if partition_order == 0 {
                     num_samples = int(block_size - u16(predictor_order))
                 } else if i != 0 {
-                    num_samples = int(block_size / u16(math.pow2_f32(partition_order)))
+                    num_samples = int(block_size / u16(pow2(partition_order)))
                 } else {
-                    num_samples = int((block_size / u16(math.pow2_f32(partition_order))) - u16(predictor_order))
+                    num_samples = int((block_size / u16(pow2(partition_order))) - u16(predictor_order))
                 }
                 //fmt.printfln("reading %d samples for residual", num_samples)
 
                 //
                 // Undo the RICE coding
                 //
-                previous_sample_value := 0
                 for s in 0..<num_samples {
                     quotient := 0
                     // Read bits until we encounter a 1 (also called unary encoding). That's our quotient.
@@ -505,7 +518,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                     //fmt.println("quotient:", quotient)
                     //fmt.println("remainder:", remainder)
 
-                    zigzag_encoded_value := quotient * int(math.pow2_f32(rice_parameter)) + remainder
+                    zigzag_encoded_value := quotient * int(pow2(rice_parameter)) + remainder
 
                     // Unzigzag the residual sample values
                     residual_sample_value := zigzag_encoded_value % 2 == 0 ? zigzag_encoded_value / 2 : (zigzag_encoded_value + 1) / -2
@@ -529,7 +542,8 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                     //fmt.printfln("    predictor[%d]=%d", sample_i, predictor)
 
                     sample := (predictor + residual_sample_value)
-                    append(&subframe_samples, i32(sample))
+                    //append(&subframe_samples, i32(sample))
+                    subframe_samples[sample_i + int(predictor_order)] = i32(sample)
 
                     //fmt.printfln("    residual[%d]=%d", sample_i, residual_sample_value)
                     //fmt.printfln("    sample[%d]=%d", sample_i, sample)
@@ -559,12 +573,13 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
         for sample in 0..<predictor_order {
             unencoded_warmup_sample := i32(read_bits(r, bits_to_read) or_return)
             if unencoded_warmup_sample > 0 && (unencoded_warmup_sample >> (uint(bits_to_read) - 1)) & 1 == 1 {
-                unencoded_warmup_sample = -(((~unencoded_warmup_sample) & (i32(math.pow2_f32(bits_to_read)) - 1)) + 1)
+                unencoded_warmup_sample = -(((~unencoded_warmup_sample) & (i32(pow2(bits_to_read)) - 1)) + 1)
             }
 
             //fmt.println("unencoded warmup sample:", unencoded_warmup_sample)
             //fmt.printfln("unencoded warmup sample: 0x%X", unencoded_warmup_sample)
-            append(&subframe_samples, unencoded_warmup_sample)
+            //append(&subframe_samples, unencoded_warmup_sample)
+            subframe_samples[sample] = unencoded_warmup_sample
         }
 
         residual_coding_method := ResidualCodingMethod(read_bits(r, 2) or_return)
@@ -575,7 +590,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
 
         partition_order := read_bits(r, 4) or_return
         //fmt.println("parition order", partition_order)
-        partitions := int(math.pow2_f32(partition_order))
+        partitions := int(pow2(partition_order))
         //fmt.println("partitions:", partitions)
         //fmt.println("block_size:", block_size)
 
@@ -589,15 +604,16 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                 if partition_order == 0 {
                     num_samples = int(block_size - u16(predictor_order))
                 } else if i != 0 {
-                    num_samples = int(block_size / u16(math.pow2_f32(partition_order)))
+                    num_samples = int(block_size / u16(pow2(partition_order)))
                 } else {
-                    num_samples = int((block_size / u16(math.pow2_f32(partition_order))) - u16(predictor_order))
+                    num_samples = int((block_size / u16(pow2(partition_order))) - u16(predictor_order))
                 }
 
                 if unencoded_bps == 0 {
                     for sample in 0..<num_samples {
-                    sample_i += 1
-                        append(&subframe_samples, i32(0))
+                        //append(&subframe_samples, i32(0))
+                        subframe_samples[sample_i + int(predictor_order)] = 0
+                        sample_i += 1
                     }
                     continue fixed_partitions_loop
                 }
@@ -608,7 +624,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                     // NOTE: This is signed 2's complement so we check the MSB
                     residual_sample_value := i8(read_bits(r, int(unencoded_bps)) or_return)
                     if residual_sample_value > 0 && (residual_sample_value >> (unencoded_bps - 1)) & 1 == 1 {
-                        residual_sample_value = -(((~residual_sample_value) & (i8(math.pow2_f32(unencoded_bps)) - 1)) + 1)
+                        residual_sample_value = -(((~residual_sample_value) & (i8(pow2(unencoded_bps)) - 1)) + 1)
                     }
 
                     //fmt.printfln("    residual[%d]=%d", sample_i, residual_sample_value)
@@ -625,9 +641,9 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                 if partition_order == 0 {
                     num_samples = int(block_size - u16(predictor_order))
                 } else if i != 0 {
-                    num_samples = int(block_size / u16(math.pow2_f32(partition_order)))
+                    num_samples = int(block_size / u16(pow2(partition_order)))
                 } else {
-                    num_samples = int((block_size / u16(math.pow2_f32(partition_order))) - u16(predictor_order))
+                    num_samples = int((block_size / u16(pow2(partition_order))) - u16(predictor_order))
                 }
                 //fmt.printfln("reading %d samples for residual", samples)
 
@@ -645,7 +661,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
                     //fmt.println("quotient:", quotient)
                     //fmt.println("remainder:", remainder)
 
-                    zigzag_encoded_value := quotient * int(math.pow2_f32(rice_parameter)) + remainder
+                    zigzag_encoded_value := quotient * int(pow2(rice_parameter)) + remainder
 
                     // Unzigzag the residual sample values
                     residual_sample_value := zigzag_encoded_value % 2 == 0 ? zigzag_encoded_value / 2 : (zigzag_encoded_value + 1) / -2
@@ -672,7 +688,8 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
 
                     //sample_value := residual_sample_value + (predictor_order == 0 ? 0 : int(subframe_samples[sample_i]))
 
-                    append(&subframe_samples, i32(sample_value))
+                    //append(&subframe_samples, i32(sample_value))
+                    subframe_samples[sample_i + int(predictor_order)] = i32(sample_value)
 
                     sample_i += 1
 
@@ -695,7 +712,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
 // TODO: remove
 frame_num := 0
 
-decode_frame :: proc(r: ^Reader, streaminfo_bps: u8, streaminfo_sample_rate: u32, channels: u8) -> (err: Error) {
+decode_frame :: proc(r: ^Reader, streaminfo_bps: u8, streaminfo_sample_rate: u32, channels: u8) -> (err: Error) #no_bounds_check {
     //
     // Frame Header
     //
@@ -742,13 +759,13 @@ decode_frame :: proc(r: ^Reader, streaminfo_bps: u8, streaminfo_sample_rate: u32
         case 1:
             actual_block_size = 192
         case 2..=5:
-            actual_block_size = 576 * auto_cast (math.pow2_f32(block_size - 2))
+            actual_block_size = 576 * auto_cast (pow2(block_size - 2))
         case 6:
             actual_block_size = auto_cast (read_byte(r) or_return) + 1
         case 7:
             actual_block_size = (read_data(r, u16be) or_return) + 1
         case 8..=15:
-            actual_block_size = 256 * auto_cast (math.pow2_f32(block_size - 8))
+            actual_block_size = 256 * auto_cast (pow2(block_size - 8))
         case:
             return .Invalid_Block_Size
     }
@@ -945,29 +962,27 @@ decode_frame :: proc(r: ^Reader, streaminfo_bps: u8, streaminfo_sample_rate: u32
             switch bps {
                 case 1..=8:
                     data := []u8{u8(sample)}
-                    os.write(output_file, data)
+                    //os.write(output_file, data)
                     md5.update(&md5_ctx, data)
                 case 9..=16:
                     first_byte := i8(sample & 0xFF)
                     second_byte := i8((sample >> 8) & 0xFF)
-                    data := slice.reinterpret([]u8, []i8{first_byte, second_byte})
-                    os.write(output_file, data)
+                    data := []u8{u8(first_byte), u8(second_byte)}
+                    //data := slice.reinterpret([]u8, []i8{first_byte, second_byte})
+                    //os.write(output_file, data)
                     md5.update(&md5_ctx, data)
                 case 17..=24:
                     first_byte := i8(sample & 0xFF)
                     second_byte := i8((sample >> 8) & 0xFF)
                     third_byte := i8((sample >> 16) & 0xFF)
-                    data := slice.reinterpret([]u8, []i8{first_byte, second_byte, third_byte})
-                    os.write(output_file, data)
+                    data := []u8{u8(first_byte), u8(second_byte), u8(third_byte)}
+                    //data := slice.reinterpret([]u8, []i8{first_byte, second_byte, third_byte})
+                    //os.write(output_file, data)
                     md5.update(&md5_ctx, data)
                 case 25..=32:
-                    first_byte := i8(sample & 0xFF)
-                    second_byte := i8((sample >> 8) & 0xFF)
-                    third_byte := i8((sample >> 16) & 0xFF)
-                    fourth_byte := i8((sample >> 24) & 0xFF)
-                    data := slice.reinterpret([]u8, []i8{first_byte, second_byte, third_byte, fourth_byte})
-                    os.write(output_file, data)
-                    md5.update(&md5_ctx, data)
+                    data := transmute([4]u8)sample
+                    //os.write(output_file, data[:])
+                    md5.update(&md5_ctx, data[:])
                 case:
                     fmt.println("INVALID BPS")
                     os.exit(1)
@@ -1192,17 +1207,17 @@ load_from_bytes :: proc(data: []byte, allocator := context.allocator) -> (err: E
                 }
             case .PICTURE:
                 // TODO: save the pic data into a struct
-                // TODO: maybe put all of these into a struct so we do one big read?
                 pic_type := read_data(&r, PictureType) or_return
                 mime_len := read_data(&r, u32be) or_return
                 mimetype := string(read_slice(&r, auto_cast mime_len) or_return)
                 desc_len := read_data(&r, u32be) or_return
                 desc := string(read_slice(&r, auto_cast desc_len) or_return)
-                width := read_data(&r, u32be) or_return
-                height := read_data(&r, u32be) or_return
-                depth := read_data(&r, u32be) or_return
-                num_colors := read_data(&r, u32be) or_return
-                data_len := read_data(&r, u32be) or_return
+                metadata := read_data(&r, PictureMetadata) or_return
+                width := metadata.width
+                height := metadata.height
+                depth := metadata.depth
+                num_colors := metadata.num_colors
+                data_len := metadata.data_len
                 data := read_slice(&r, auto_cast data_len) or_return
                 //fmt.println(pic_type)
                 //fmt.println(mimetype)
@@ -1250,8 +1265,8 @@ load_from_bytes :: proc(data: []byte, allocator := context.allocator) -> (err: E
 load_from_file :: proc(filename: string, allocator := context.allocator) -> (err: Error) {
     context.allocator = allocator
 
-    output_file, _ = os.open("output.raw", os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o664)
-    defer os.close(output_file)
+    //output_file, _ = os.open("output.raw", os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o664)
+    //defer os.close(output_file)
 
     data, ok := os.read_entire_file(filename)
     defer delete(data)
