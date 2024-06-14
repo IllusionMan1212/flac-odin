@@ -19,6 +19,8 @@ faulty/08 -> This one works when it shouldn't. (Blocksize 65536, exceeds the all
 faulty/09 -> This one works when it shouldn't. (Blocksize 1, below the allowed min of 16 (last frame(subframe?) is allowed to have less than 16))
 
 Things:-
+[ ] Options
+[ ] File streaming API? io.Stream??
 [ ] Lots of checks (look at the TODOs in flac.odin)
 [ ] Memory optimizations
 [ ] Speed optimizations
