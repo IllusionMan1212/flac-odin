@@ -23,7 +23,7 @@ main :: proc() {
     allocator := virtual.arena_allocator(&arena)
 
     start := time.now()
-    err := flac.load_from_file(os.args[1], allocator = allocator)
+    flac_data, err := flac.load_from_file(os.args[1], allocator = allocator)
     if err != nil {
         fmt.eprintln(err)
         os.exit(1)

@@ -20,21 +20,16 @@ faulty/09 -> This one works when it shouldn't. (Blocksize 1, below the allowed m
 
 Things:-
 [ ] Options
+	- [ ] Vorbis comment data
+	- [ ] Cuesheet ?
+	- [ ] Seektable ?
+	- [x] Picture data
 [ ] File streaming API? io.Stream??
 [ ] Lots of checks (look at the TODOs in flac.odin)
 [ ] Memory optimizations
 [ ] Speed optimizations
 [ ] Seeking
-[x] RICE2
-[x] Add check for mismatched bits per sample
-[x] Unencoded BPS is zero
-[x] CONSTANT subframe
-[x] Stereo Decorrelation
-[x] MD5 checksums
-	- [x] VERBATIM subframe
-	- [x] CONSTANT subframe
-	- [x] FIXED subframe
-	- [x] LPC subframe
+[ ] Fuzzing to test the stability of the code
 
 [ ] Encoder (low priority for now)
 

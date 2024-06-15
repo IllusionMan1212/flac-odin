@@ -154,10 +154,24 @@ ResidualCodingMethod :: enum {
     RICE2,
 }
 
+/*
+bit_field u32be {
+    last_block: bool | 1,
+    type: BlockType | 7,
+    length: u32be | 24,
+}
+*/
 MetadataBlockHeader :: struct {
     type:       BlockType,
     last_block: bool,
     length:     u32,
+}
+
+#assert(size_of(FlacHeader) == 0x2A)
+FlacHeader :: struct #packed {
+    magic:             u32be,
+    streaminfo_header: u32be,
+    streaminfo:        StreamInfoBlock,
 }
 
 #assert(size_of(Seekpoint) == 18)

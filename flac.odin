@@ -52,7 +52,7 @@ Option :: enum {
 
 Options :: bit_set[Option]
 
-PictureType :: enum u32be {
+PictureType :: enum u32 {
     OTHER,
     FILE_ICON_32x32_PNG,
     OTHER_FILE_ICON,
@@ -77,24 +77,30 @@ PictureType :: enum u32be {
 }
 
 Flac :: struct {
-    // TODO: Sample slice or array, other stuff
-    metadata: Flac_Metadata,
+    // TODO: Other stuff
+    metadata: FlacMetadata,
     samples:  []i32,
 }
 
-Flac_Metadata :: struct {
-    // TODO: Picture info and data and other stuff
-    total_samples:   u32,
+FlacMetadata :: struct {
+    total_samples:   u64,
     bits_per_sample: u8,
     channels:        u8,
     sample_rate:     u32,
+    expected_md5:    [16]byte,
+    calculated_md5:  [16]byte,
+    pictures:        []Picture,
 }
 
-#assert(size_of(FlacHeader) == 0x2A)
-FlacHeader :: struct #packed {
-    magic:             u32be,
-    streaminfo_header: u32be,
-    streaminfo:        StreamInfoBlock,
+Picture :: struct {
+    type: PictureType,
+    mimetype: string,
+    description: string,
+    width: u32,
+    height: u32,
+    depth: u32,
+    num_colors: u32,
+    data: []byte,
 }
 
 decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32, err: Error) #no_bounds_check {
@@ -168,6 +174,7 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
         }
 
         coefficients := make([]i32, predictor_order)
+        defer delete(coefficients)
 
         for i in 0..<predictor_order {
             unencoded_coefficient := i32(read_bits(r, uint(coeff_precision)) or_return)
@@ -393,9 +400,7 @@ frame_num := 0
 
 decode_frame :: proc(
     r: ^Reader,
-    streaminfo_bps: u8,
-    streaminfo_sample_rate: u32,
-    channels: u8,
+    flac: ^Flac,
 ) -> (
     err: Error,
 ) #no_bounds_check {
@@ -462,8 +467,7 @@ decode_frame :: proc(
     actual_sample_rate_in_Hz: u32
     switch sample_rate {
         case .USE_STREAMINFO:
-            // TODO: ditto for global streaminfo
-            actual_sample_rate_in_Hz = streaminfo_sample_rate
+            actual_sample_rate_in_Hz = flac.metadata.sample_rate
         case ._88_2kHz:
             actual_sample_rate_in_Hz = 88200
         case ._176_4kHz:
@@ -522,9 +526,7 @@ decode_frame :: proc(
     bps: u8
     switch sample_size {
         case .USE_STREAMINFO:
-            // TODO: maybe we'll store the streaminfo data in a global flac struct and then retrieve from there
-            // instead of passing a parameter
-            bps = streaminfo_bps
+            bps = flac.metadata.bits_per_sample
         case ._8BPS:
             bps = 8
         case ._12BPS:
@@ -539,11 +541,11 @@ decode_frame :: proc(
             bps = 32
     }
 
-    if bps != streaminfo_bps {
+    if bps != flac.metadata.bits_per_sample {
         return .Bits_Per_Second_Mismatch
     }
 
-    frame_channels := channels
+    frame_channels := flac.metadata.channels
     switch channel_assignment {
         case .MONO:
             frame_channels = 1
@@ -566,7 +568,7 @@ decode_frame :: proc(
             frame_channels = 2
     }
 
-    if frame_channels != channels {
+    if frame_channels != flac.metadata.channels {
         // TODO: warning or error?
         // we have a faulty file that says it has 5 channels but subframes all say they got 1
         // we also have an two uncommon files with increasing and decreasing number of channels
@@ -576,6 +578,7 @@ decode_frame :: proc(
 
     // TODO: remember to clean this up
     subframes := make([][]i32, frame_channels)
+    defer delete(subframes)
     for i in 0..<frame_channels {
         frame_bps := bps
         // For side channels we increase the bps by 1
@@ -650,6 +653,14 @@ decode_frame :: proc(
         }
     }
 
+    // TODO: We need a way to copy (or better yet just point to) the decoded sample data
+    // We'll probably either copy each subframe's samples somehow, or have a dynamic array and append to that.
+    // Both are slow-ish but I can't think of a faster way that just works.
+    // This doesn't work btw, just for my future self to not think this is fine.
+    for subframe in subframes {
+        copy(flac.samples, subframe)
+    }
+
     //
     // Frame Footer
     //
@@ -667,7 +678,7 @@ decode_frame :: proc(
     return nil
 }
 
-load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context.allocator) -> (err: Error) {
+load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context.allocator) -> (flac: ^Flac, err: Error) {
     r: Reader
     bytes.reader_init(&r, data)
 
@@ -676,26 +687,14 @@ load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context
 
     header := read_data(&r, FlacHeader) or_return
     if header.magic != FLAC_MAGIC {
-        return .Invalid_Signature
+        return nil, .Invalid_Signature
     }
-
-    //fmt.println(header)
 
     sample_rate := header.streaminfo.sr_chan_bps_ts >> 44
     num_channel_minus_one := (header.streaminfo.sr_chan_bps_ts >> 41) & 7
     bits_per_sample_minus_one := (header.streaminfo.sr_chan_bps_ts >> 36) & 0x1F
     total_samples := header.streaminfo.sr_chan_bps_ts & 0xFFFFFFFFF
 
-    //fmt.println("sample rate:", sample_rate)
-    //fmt.println("channels:", num_channel_minus_one + 1)
-    //fmt.println("bits per sample:", bits_per_sample_minus_one + 1)
-    //fmt.println("total samples:", total_samples)
-
-    /*bit_field u32be {
-        last_block: bool | 1,
-        type: BlockType | 7,
-        length: u32be | 24,
-    }*/
     streaminfo_header := MetadataBlockHeader {
         last_block = bool(header.streaminfo_header >> 31),
         type       = BlockType((header.streaminfo_header >> 24) & 0x7F),
@@ -703,9 +702,20 @@ load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context
     }
 
     if streaminfo_header.type != .STREAMINFO {
-        return .Missing_StreamInfo
+        return flac, .Missing_StreamInfo
     }
 
+    if flac == nil {
+        flac = new(Flac)
+    }
+
+    flac.metadata.channels = u8(num_channel_minus_one + 1)
+    flac.metadata.sample_rate = u32(sample_rate)
+    flac.metadata.bits_per_sample = u8(bits_per_sample_minus_one + 1)
+    flac.metadata.total_samples = u64(total_samples)
+    flac.metadata.expected_md5 = header.streaminfo.md5
+
+    pictures := make([dynamic]Picture, 0, 2, allocator)
     last_block := streaminfo_header.last_block
     for !last_block {
         md_block_hdr := read_data(&r, u32be) or_return
@@ -714,7 +724,6 @@ load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context
             type       = BlockType((md_block_hdr >> 24) & 0x7F),
             length     = u32(md_block_hdr & 0xFFFFFF),
         }
-        //fmt.println("Metadata block", metadata_block_header)
 
         last_block = cast(bool)(metadata_block_header.last_block)
 
@@ -757,7 +766,7 @@ load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context
                     // I think so, the comment isn't crucial to the decoding process.
                     //fmt.println("Metadata header length mismatch!")
                     //fmt.printfln("Expected size: %d, Got %d", metadata_block_header.length, actual_size)
-                    return .Metadata_Block_Length_Mismatch
+                    return flac, .Metadata_Block_Length_Mismatch
                 }
                 // TODO: framing bit??
                 //fmt.println(vendor_name)
@@ -767,7 +776,7 @@ load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context
                 cuesheet := read_data(&r, CueSheet) or_return
                 if cuesheet.num_tracks < 1 {
                     // TODO: should this be a warning instead of an error that halts the decoding?
-                    return .Missing_Lead_Out_Track
+                    return flac, .Missing_Lead_Out_Track
                 }
                 //fmt.println(cuesheet)
                 for i in 0..<cuesheet.num_tracks {
@@ -779,28 +788,24 @@ load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context
                     //fmt.println(track)
                 }
             case .PICTURE:
-                // TODO: save the pic data into a struct
-                pic_type := read_data(&r, PictureType) or_return
+                pic_type := PictureType(read_data(&r, u32be) or_return)
                 mime_len := read_data(&r, u32be) or_return
                 mimetype := string(read_slice(&r, auto_cast mime_len) or_return)
                 desc_len := read_data(&r, u32be) or_return
                 desc := string(read_slice(&r, auto_cast desc_len) or_return)
                 metadata := read_data(&r, PictureMetadata) or_return
-                width := metadata.width
-                height := metadata.height
-                depth := metadata.depth
-                num_colors := metadata.num_colors
-                data_len := metadata.data_len
-                data := read_slice(&r, auto_cast data_len) or_return
-                //fmt.println(pic_type)
-                //fmt.println(mimetype)
-                //fmt.println(desc)
-                //fmt.println(width)
-                //fmt.println(height)
-                //fmt.println(depth)
-                //fmt.println(num_colors)
-                //fmt.println(data_len)
-                //fmt.println(data)
+                data := read_slice(&r, auto_cast metadata.data_len) or_return
+                picture := Picture{
+                    type = pic_type,
+                    mimetype = mimetype,
+                    description = desc,
+                    width = u32(metadata.width),
+                    height = u32(metadata.height),
+                    depth = u32(metadata.depth),
+                    num_colors = u32(metadata.num_colors),
+                    data = data,
+                }
+                append(&pictures, picture)
             case .INVALID:
                 fmt.eprintln("Invalid block type")
                 bytes.reader_seek(&r, auto_cast metadata_block_header.length, .Current)
@@ -811,31 +816,33 @@ load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context
     }
 
     // Yucky
-    err = decode_frame(&r, u8(bits_per_sample_minus_one + 1), u32(sample_rate), u8(num_channel_minus_one + 1))
+    err = decode_frame(&r, flac)
     for err == nil {
-        err = decode_frame(&r, u8(bits_per_sample_minus_one + 1), u32(sample_rate), u8(num_channel_minus_one + 1))
+        err = decode_frame(&r, flac)
     }
 
+    flac.metadata.pictures = pictures[:]
+
     if err != .EOF {
-        return err
+        return flac, err
     }
 
     //
     // Validate the decoded audio data's md5
     //
-    calculated_md5 := make([]byte, 16)
-    md5.final(&md5_ctx, calculated_md5)
+    calculated_md5: [16]byte
+    md5.final(&md5_ctx, calculated_md5[:])
 
-    if mem.compare(calculated_md5, header.streaminfo.md5[:]) != 0 {
-        fmt.printfln("Expected: %X", header.streaminfo.md5)
-        fmt.printfln("Got: %X", calculated_md5)
-        return .MD5_Mismatch
+    flac.metadata.calculated_md5 = calculated_md5
+
+    if mem.compare(calculated_md5[:], header.streaminfo.md5[:]) != 0 {
+        return flac, .MD5_Mismatch
     }
 
-    return nil
+    return flac, nil
 }
 
-load_from_file :: proc(filename: string, options := Options{}, allocator := context.allocator) -> (err: Error) {
+load_from_file :: proc(filename: string, options := Options{}, allocator := context.allocator) -> (flac: ^Flac, err: Error) {
     context.allocator = allocator
 
     data, ok := os.read_entire_file(filename)
@@ -844,6 +851,20 @@ load_from_file :: proc(filename: string, options := Options{}, allocator := cont
     if ok {
         return load_from_bytes(data)
     } else {
-        return .Unable_To_Read_File
+        return nil, .Unable_To_Read_File
     }
+}
+
+destroy :: proc(flac: ^Flac) {
+    // TODO: clean up the allocations
+    delete(flac.samples)
+    // TODO: I think this data gets deleted when the data from os.read_entire_file is deleted.
+    // Double check that and if it's true then make sure to copy this data.
+    // Copying small strings is fine but copying the image pixel data might be slow.
+    //for picture in flac.metadata.pictures {
+    //    picture.mimetype
+    //    picture.data
+    //    picture.description
+    //}
+    delete(flac.metadata.pictures)
 }
