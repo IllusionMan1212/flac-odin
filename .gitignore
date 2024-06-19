@@ -1,7 +1,4 @@
+.vscode/
 ols.json
 odinfmt.json
-example/
-example/!*.odin
-tests/test-files/LPC_example.flac
-tests/test-files/fixed_example.flac
-tests/test-files/verbatim_example.flac
+tests/*.flac

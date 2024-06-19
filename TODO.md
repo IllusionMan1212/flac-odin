@@ -2,11 +2,14 @@ Files:-
 27 -> This one uses the old format of specifying a variable block strategy. Look into it.
 	  The way to know the blocking strategy for this old format FLACs is to see if min_block_size and max_block_size are different,
 	  if they are, then the blocking strategy is VARIABLE, if not, then it's FIXED.
-44 -> High memory and CPU usage. needs optimization.
 
-uncommon/01 -> This one decodes fine but the expected MD5 is 0x00 * 16 which doesn't match the calculated MD5. not sure what to do about this.
-uncommon/02 -> No MD5
-uncommon/03 -> No MD5
+Playback issues in the example program that may relate to the decoder:-
+05 - CRC fails for a frame. The gotten CRC is different each time, expected CRC is also different sometimes.
+06 - Same as above
+23 - Crunchy loud noise mixed with the actual audio data
+25 - Same CRC problem
+It's worth noting that if we get rid of the CRC checks the files play just fine.
+
 uncommon/04 -> We get a bits per sample mismatch
 uncommon/10 -> We error with Invalid Signature. I assume for these two I should look for the frame sync bits. But maybe my decoder should reject these. idk.
 uncommon/11 -> We error with Invalid Signature
@@ -14,19 +17,24 @@ uncommon/11 -> We error with Invalid Signature
 faulty/01 -> This one works when it shouldn't (Wrong max blocksize)
 faulty/02 -> This one works when it shouldn't (Wrong max framesize)
 faulty/04 -> This one works when it shouldn't. This one has a wrong number of channels (whatever that means)
+			 Each frame has to be played by itself, otherwise plays sped up.
 faulty/05 -> This one works when it shouldn't. (Wrong number of samples)
+			 This should be fine to decode and play.
 faulty/08 -> This one works when it shouldn't. (Blocksize 65536, exceeds the allowed max of 65535)
-faulty/09 -> This one works when it shouldn't. (Blocksize 1, below the allowed min of 16 (last frame(subframe?) is allowed to have less than 16))
+			 We should error here. We segfault currently.
+faulty/09 -> This one works when it shouldn't. (Blocksize 1, below the allowed min of 16 (only the last frame is allowed to have less than 16))
+			 We should error here. We play correctly currently.
+faulty/11 -> We return an error now, but we should just warn and decode the audio fine.
 
 Things:-
 [ ] Options
-	- [ ] Vorbis comment data
+	- [x] Vorbis comment data
 	- [ ] Cuesheet ?
 	- [ ] Seektable ?
 	- [x] Picture data
-[ ] File streaming API? io.Stream??
+[x] File streaming API? io.Stream??
 [ ] Lots of checks (look at the TODOs in flac.odin)
-[ ] Memory optimizations
+[x] Memory optimizations
 [ ] Speed optimizations
 [ ] Seeking
 [ ] Fuzzing to test the stability of the code

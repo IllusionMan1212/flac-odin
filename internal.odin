@@ -79,11 +79,6 @@ crc16_lookup := [256]u16 {
 
 fixed_coefficients := [4][]i32{{1}, {2, -1}, {3, -3, 1}, {4, -6, 4, -1}}
 
-// TODO: no idea if I want to keep this global and a thread_local
-// or if I should just init it in load_from_bytes
-@(thread_local)
-md5_ctx: md5.Context
-
 BlockType :: enum u16be {
     STREAMINFO,
     PADDING,
@@ -190,13 +185,13 @@ StreamInfoBlock :: struct #packed {
         max_frame_size: u32be | 24,
     },
     /*
-	bit_field u64be {
+    bit_field u64be {
         sample_rate: u32be | 20,
         num_channel_minus_one: u8 | 3,
         bits_per_sample_minus_one: u8 | 5,
         total_samples: u64be | 36,
     }
-	*/
+    */
     sr_chan_bps_ts: u64be,
     md5:            [16]byte,
 }
@@ -253,7 +248,7 @@ decode_extended_utf8 :: proc(r: ^Reader) -> (decoded_num: u64, err: Error) {
 
     decoded_num = u64(0)
 
-    first_byte := read_byte(r) or_return
+    first_byte := read_bits(r, 8) or_return
     utf8_sequence_len := 0
 
     for i: uint = 7; i > 0; i -= 1 {
@@ -269,7 +264,7 @@ decode_extended_utf8 :: proc(r: ^Reader) -> (decoded_num: u64, err: Error) {
         octets := make([dynamic]byte, 0, 8)
         defer delete(octets)
         for i := utf8_sequence_len - 1; i > 0; i -= 1 {
-            append(&octets, read_byte(r) or_return)
+            append(&octets, byte(read_bits(r, 8) or_return))
         }
 
         switch utf8_sequence_len {
