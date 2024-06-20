@@ -4,11 +4,7 @@ Files:-
 	  if they are, then the blocking strategy is VARIABLE, if not, then it's FIXED.
 
 Playback issues in the example program that may relate to the decoder:-
-05 - CRC fails for a frame. The gotten CRC is different each time, expected CRC is also different sometimes.
-06 - Same as above
 23 - Crunchy loud noise mixed with the actual audio data
-25 - Same CRC problem
-It's worth noting that if we get rid of the CRC checks the files play just fine.
 
 uncommon/04 -> We get a bits per sample mismatch
 uncommon/10 -> We error with Invalid Signature. I assume for these two I should look for the frame sync bits. But maybe my decoder should reject these. idk.

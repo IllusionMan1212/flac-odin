@@ -16,6 +16,7 @@ main :: proc() {
         fmt.eprintln("Please provide a path to a flac file.")
         os.exit(1)
     }
+	defer delete(os.args)
 
     handle: ^alsa.pcm_t
 
@@ -61,14 +62,12 @@ main :: proc() {
         converted_samples[i] = i16(new_sample)
     }
 
-    for {
-        frames := alsa.pcm_writei(handle, raw_data(converted_samples), u64(len(flac_data.samples)) / u64(flac_data.metadata.channels))
-        if frames < 0 {
-            fmt.eprintln("Error writing to PCM device:", alsa.strerror(auto_cast frames))
-            break
-        }
-        fmt.printfln("Played %d frames", frames)
+    frames := alsa.pcm_writei(handle, raw_data(converted_samples), u64(len(flac_data.samples)) / u64(flac_data.metadata.channels))
+    if frames < 0 {
+        fmt.eprintln("Error writing to PCM device:", alsa.strerror(auto_cast frames))
+		return
     }
+    fmt.printfln("Played %d frames", frames)
 
     alsa_err = alsa.pcm_drain(handle)
     if alsa_err < 0 {

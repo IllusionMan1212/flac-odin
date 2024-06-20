@@ -17,6 +17,7 @@ main :: proc() {
         fmt.eprintln("Please provide a path to a flac file.")
         os.exit(1)
     }
+    defer delete(os.args)
 
     arena: virtual.Arena
     handle: ^alsa.pcm_t
@@ -53,12 +54,10 @@ main :: proc() {
     sample_rate := flac_data.metadata.sample_rate
     channels := flac_data.metadata.channels
 
-    //md5_ctx: md5.Context
-    //md5.init(&md5_ctx)
+    md5_ctx: md5.Context
+    md5.init(&md5_ctx)
     for {
-        frame, err := flac.read_next_frame(reader, flac_data)
-
-        defer delete(frame.samples)
+        frame, err := flac.read_next_frame(reader, flac_data, allocator)
         if err != nil {
             if err == .EOF {
                 break
@@ -99,15 +98,15 @@ main :: proc() {
         }
         fmt.printfln("Played %d frames", frames)
 
-        //flac.md5hash(&md5_ctx, flac_data.metadata.bits_per_sample, samples)
+        flac.md5hash(&md5_ctx, flac_data.metadata.bits_per_sample, frame.samples)
     }
     end := time.now()
 
-    //err = flac.md5sum(&md5_ctx, flac_data)
-    //if err == .MD5_Mismatch {
-    //    fmt.println("Decoded audio data is not correct.")
-    //    os.exit(1)
-    //}
+    err = flac.md5sum(&md5_ctx, flac_data)
+    if err == .MD5_Mismatch {
+        fmt.println("Decoded audio data is not correct.")
+        os.exit(1)
+    }
 
     alsa_err = alsa.pcm_drain(handle)
     if alsa_err < 0 {

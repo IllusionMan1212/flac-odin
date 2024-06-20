@@ -852,15 +852,17 @@ read_metadata :: proc(r: ^Reader, buffered := false, allocator := context.alloca
     return flac, nil
 }
 
-read_next_frame :: proc(r: ^Reader, flac: ^Flac) -> (frame: Frame, err: Error) {
+read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator) -> (frame: Frame, err: Error) {
     //
     // Frame Header
     //
+    context.allocator = allocator
     tee_r: io.Tee_Reader
-    crc_buffer: bytes.Buffer
-    bytes.buffer_init_allocator(&crc_buffer, 0, 128)
-    defer bytes.buffer_destroy(&crc_buffer)
-    crc := bytes.buffer_to_stream(&crc_buffer)
+
+    crc_buffer: Buffer
+    buffer_init_allocator(&crc_buffer, 0, 128, context.temp_allocator)
+
+    crc := buffer_to_stream(&crc_buffer)
     r := &Reader{
         r = io.tee_reader_init(&tee_r, r, crc),
         buf = r.buf,
@@ -960,7 +962,7 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac) -> (frame: Frame, err: Error) {
     // TODO: sample rate MUST NOT be 0 if the subframe contains audio.
     // a sample rate of 0 MAY be used when non-audio is represented.
 
-    crc8_bytes := bytes.buffer_to_bytes(&crc_buffer)
+    crc8_bytes := buffer_to_bytes(&crc_buffer)
     frame_header_crc := u8(read_bits(r, 8) or_return)
     calculated_header_crc := calculate_crc8(crc8_bytes)
 
@@ -1064,7 +1066,7 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac) -> (frame: Frame, err: Error) {
     //
     // Frame Footer
     //
-    crc16_bytes := bytes.buffer_to_bytes(&crc_buffer)
+    crc16_bytes := buffer_to_bytes(&crc_buffer)
     frame_crc := u16(read_data(r, u16be) or_return)
     calculated_frame_crc := calculate_crc16(crc16_bytes)
 
@@ -1101,7 +1103,7 @@ md5hash :: proc(md5_ctx: ^md5.Context, bps: u8, samples: []i32) {
 }
 
 md5sum :: proc(md5_ctx: ^md5.Context, flac: ^Flac) -> Error {
-    calculated_md5: [16]byte
+    calculated_md5 := [16]byte{}
     md5.final(md5_ctx, calculated_md5[:])
 
     flac.metadata.calculated_md5 = calculated_md5
