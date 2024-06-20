@@ -860,6 +860,8 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
     tee_r: io.Tee_Reader
 
     crc_buffer: Buffer
+    // NOTE: using the default heap allocator here causes a use-after-free bug on files subset/05, subset/06, and subset/25
+    // No idea what the cause of the bug is.
     buffer_init_allocator(&crc_buffer, 0, 128, context.temp_allocator)
 
     crc := buffer_to_stream(&crc_buffer)
