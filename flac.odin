@@ -861,8 +861,9 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
 
     crc_buffer: Buffer
     // NOTE: using the default heap allocator here causes a use-after-free bug on files subset/05, subset/06, and subset/25
-    // No idea what the cause of the bug is.
-    buffer_init_allocator(&crc_buffer, 0, 128, context.temp_allocator)
+    // No idea what the cause of the bug is. I am inclined to believe that it's a bug of the default heap allocator but
+    // maybe my code is fucking up the memory so bad it makes it seems that way.
+    buffer_init_allocator(&crc_buffer, 0, 128)
 
     crc := buffer_to_stream(&crc_buffer)
     r := &Reader{

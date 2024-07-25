@@ -310,7 +310,7 @@ decode_extended_utf8 :: proc(r: ^Reader) -> (decoded_num: u64, err: Error) {
     return decoded_num, nil
 }
 
-@(optimization_mode = "speed")
+@(optimization_mode = "favor_size")
 calculate_crc8 :: proc(data: []byte) -> u8 #no_bounds_check {
     crc: u8 = 0
 
@@ -321,7 +321,7 @@ calculate_crc8 :: proc(data: []byte) -> u8 #no_bounds_check {
     return crc
 }
 
-@(optimization_mode = "speed")
+@(optimization_mode = "favor_size")
 calculate_crc16 :: proc(data: []byte) -> u16 #no_bounds_check {
     crc: u16 = 0
 
