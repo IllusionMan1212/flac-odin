@@ -34,6 +34,8 @@ Things:-
 [ ] Speed optimizations
 [ ] Seeking
 [ ] Fuzzing to test the stability of the code
+[ ] Check if the use-after-free bug happens on Windows, and if so, if the address sanitizer will show us the full stacktrace
+	instead of skipping some procs.
 
 [ ] Encoder (low priority for now)
 

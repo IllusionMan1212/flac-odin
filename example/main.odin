@@ -36,7 +36,7 @@ main :: proc() {
     allocator := virtual.arena_allocator(&arena)
 
     start := time.now()
-    flac_data, reader, err := flac.load_from_file_buffered(os.args[1], allocator)
+    flac_data, reader, err := flac.load_from_file(os.args[1], allocator)
     if err != nil {
         fmt.println("Error while reading flac file:", err)
         os.exit(1)
@@ -57,7 +57,7 @@ main :: proc() {
     md5_ctx: md5.Context
     md5.init(&md5_ctx)
     for {
-        frame, err := flac.read_next_frame(reader, flac_data, allocator)
+        frame, err := flac.read_next_frame(reader, flac_data)
         if err != nil {
             if err == .EOF {
                 break

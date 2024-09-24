@@ -33,15 +33,11 @@ FlacError :: enum {
 
 /*
 Option:
-    `.skip_md5_check`
-        Skips checking the MD5 hash of the decoded sample data.
-        Offers a slight performance increase but will not error if the data is incorrect.
     `.only_return_metadata`
         Returns all metadata of a FLAC stream without decoding the audio data.
 */
 
 Option :: enum u8 {
-    skip_md5_check,
     only_return_metadata,
 }
 
@@ -73,8 +69,7 @@ PictureType :: enum u32 {
 
 Flac :: struct {
     metadata: FlacMetadata,
-    // When using the in-memory API this will hold all the decoded samples of the FLAC stream.
-    // When using the buffered API this will hold the samples up to the currently decoded frame. If all frames have
+    // This holds the samples up to the currently decoded frame. If all frames have
     // been decoded then this will hold all the decoded samples.
     samples:  [dynamic]i32,
 }
@@ -400,255 +395,6 @@ decode_subframe :: proc(r: ^Reader, bps: u8, block_size: u16) -> (samples: []i32
 }
 
 @(private)
-decode_frame :: proc(
-    r: ^Reader,
-    flac: ^Flac,
-    md5_ctx: ^md5.Context,
-    options: Options,
-) -> (
-    err: Error,
-) #no_bounds_check {
-    //
-    // Frame Header
-    //
-    tee_r: io.Tee_Reader
-    crc_buffer: bytes.Buffer
-    bytes.buffer_init_allocator(&crc_buffer, 0, 128)
-    defer bytes.buffer_destroy(&crc_buffer)
-    crc := bytes.buffer_to_stream(&crc_buffer)
-    r := &Reader{
-        r = io.tee_reader_init(&tee_r, r, crc),
-        buf = r.buf,
-        x = r.x,
-        n = r.n,
-    }
-
-    data := read_data(r, u16be) or_return
-
-    sync_code := data >> 2
-    blocking_strategy := BlockingStrategy(data & 1)
-
-    data = read_data(r, u16be) or_return
-    block_size := data >> 12
-    sample_rate := SampleRate((data >> 8) & 0xF)
-    channel_assignment := ChannelAssignment((data >> 4) & 0xF)
-    sample_size := SampleSize((data >> 1) & 7)
-
-    coded_num := decode_extended_utf8(r) or_return
-    if blocking_strategy == .VARIABLE {
-        // Sample number of first sample
-        // MUST NOT be larger than 36 bits unencoded or 7 bytes encoded.
-        // MUST be equal to the number of samples preceding the current frame. Otherwise seeking is not possible.
-        // TODO: also write a check for the number of samples so we'll probably keep track of how many samples we decoded
-        // maybe the number of decoded samples can be inferred by the number of frames ?? or just use the length of 
-        // the decoded_samples slice.
-        if coded_num > 0x1000000000 {
-            // TODO: Sample number can't be bigger than 36 bits
-        }
-    } else {
-        // Frame number
-        // MUST NOT be larger than 31 bits unencoded or 6 bytes encoded.
-        // MUST be equal to the number of frames preceding the current frame. Otherwise seeking is not possible.
-        // TODO: also write a check for the number of frames so we'll probably keep track of how many frames we decoded.
-        if coded_num > 0x80000000 {
-            // TODO: Frame number cannot be bigger than 31 bits
-        }
-    }
-
-    actual_block_size: u16be
-    switch block_size {
-        case 1:
-            actual_block_size = 192
-        case 2..=5:
-            actual_block_size = 576 * auto_cast (pow2(block_size - 2))
-        case 6:
-            actual_block_size = auto_cast (read_bits(r, 8) or_return) + 1
-        case 7:
-            actual_block_size = (read_data(r, u16be) or_return) + 1
-        case 8..=15:
-            actual_block_size = 256 * auto_cast (pow2(block_size - 8))
-        case:
-            return .Invalid_Block_Size
-    }
-
-    //if actual_block_size < 15 && !last_frame {
-        // TODO: block sizes less than 16 are only valid for the last frame and MUST NOT be used for any other frame.
-    //}
-
-    actual_sample_rate_in_Hz: u32
-    switch sample_rate {
-        case .USE_STREAMINFO:
-            actual_sample_rate_in_Hz = flac.metadata.sample_rate
-        case ._88_2kHz:
-            actual_sample_rate_in_Hz = 88200
-        case ._176_4kHz:
-            actual_sample_rate_in_Hz = 176400
-        case ._192kHz:
-            actual_sample_rate_in_Hz = 192000
-        case ._8kHz:
-            actual_sample_rate_in_Hz = 8000
-        case ._16kHz:
-            actual_sample_rate_in_Hz = 16000
-        case ._22_05kHz:
-            actual_sample_rate_in_Hz = 22005
-        case ._24kHz:
-            actual_sample_rate_in_Hz = 24000
-        case ._32kHz:
-            actual_sample_rate_in_Hz = 32000
-        case ._44_1kHz:
-            actual_sample_rate_in_Hz = 44100
-        case ._48kHz:
-            actual_sample_rate_in_Hz = 48000
-        case ._96kHz:
-            actual_sample_rate_in_Hz = 96000
-        case .USE_8_BITS_IN_kHz_FROM_HEADER_END:
-            actual_sample_rate_in_Hz = auto_cast (read_bits(r, 8) or_return) * 1000
-        case .USE_16_BITS_IN_Hz_FROM_HEADER_END:
-            actual_sample_rate_in_Hz = auto_cast (read_data(r, u16be) or_return)
-        case .USE_16_BITS_IN_TENS_OF_Hz_FROM_HEADER_END:
-            actual_sample_rate_in_Hz = auto_cast (read_data(r, u16be) or_return) * 10
-        case .INVALID: fallthrough
-        case:
-            return .Invalid_Sample_Rate
-    }
-
-    // TODO: sample rate MUST NOT be 0 if the subframe contains audio.
-    // a sample rate of 0 MAY be used when non-audio is represented.
-
-    crc8_bytes := bytes.buffer_to_bytes(&crc_buffer)
-    frame_header_crc := u8(read_bits(r, 8) or_return)
-    calculated_header_crc := calculate_crc8(crc8_bytes)
-
-    if frame_header_crc != calculated_header_crc {
-        fmt.printfln("Expected frame header CRC: 0x%X, got: 0x%X", frame_header_crc, calculated_header_crc)
-        return .CRC_Mismatch
-    }
-
-    //
-    // Subframes
-    //
-    bps: u8
-    switch sample_size {
-        case .USE_STREAMINFO:
-            bps = flac.metadata.bits_per_sample
-        case ._8BPS:
-            bps = 8
-        case ._12BPS:
-            bps = 12
-        case ._16BPS:
-            bps = 16
-        case ._20BPS:
-            bps = 20
-        case ._24BPS:
-            bps = 24
-        case ._32BPS:
-            bps = 32
-    }
-
-    if bps != flac.metadata.bits_per_sample {
-        return .Bits_Per_Second_Mismatch
-    }
-
-    frame_channels := flac.metadata.channels
-    switch channel_assignment {
-        case .MONO:
-            frame_channels = 1
-        case ._3CHANNELS:
-            frame_channels = 3
-        case ._4CHANNELS:
-            frame_channels = 4
-        case ._5CHANNELS:
-            frame_channels = 5
-        case ._6CHANNELS:
-            frame_channels = 6
-        case ._7CHANNELS:
-            frame_channels = 7
-        case ._8CHANNELS:
-            frame_channels = 8
-        case ._2CHANNELS: fallthrough
-        case .STEREO_LEFT_SIDE: fallthrough
-        case .STEREO_SIDE_RIGHT: fallthrough
-        case .STEREO_MID_SIDE:
-            frame_channels = 2
-    }
-
-    if frame_channels != flac.metadata.channels {
-        // TODO: warning or error?
-        // we have a faulty file that says it has 5 channels but subframes all say they got 1
-        // we also have an two uncommon files with increasing and decreasing number of channels
-        // uncommon are supposed to be unusual but still valid FLAC files. why is that first one faulty then???
-        // so many questions...
-    }
-
-    subframes := make([][]i32, frame_channels)
-    defer delete(subframes)
-    for i in 0..<frame_channels {
-        frame_bps := bps
-        // For side channels we increase the bps by 1
-        // Left, mid and right channels don't need an extra bit.
-        // ref: https://github.com/ietf-wg-cellar/flac-specification/blob/master/rfc_backmatter.md#first-audio-frame
-        if (channel_assignment == .STEREO_SIDE_RIGHT && i == 0) ||
-           ((channel_assignment == .STEREO_LEFT_SIDE || channel_assignment == .STEREO_MID_SIDE) && i == 1) {
-            frame_bps += 1
-        }
-
-        subframes[i] = decode_subframe(r, frame_bps, auto_cast actual_block_size) or_return
-    }
-
-    align_to_byte(r)
-
-    correlate(subframes, channel_assignment)
-
-    // Write the samples interleaved.
-    for i in 0..<len(subframes[0]) {
-        for subframe, sf in subframes {
-            sample := subframe[i]
-            append(&flac.samples, sample)
-
-            if .skip_md5_check not_in options {
-                switch bps {
-                    case 1..=8:
-                        md5.update(md5_ctx, {u8(sample)})
-                    case 9..=16:
-                        first_byte := u8(sample & 0xFF)
-                        second_byte := u8((sample >> 8) & 0xFF)
-                        md5.update(md5_ctx, {first_byte, second_byte})
-                    case 17..=24:
-                        first_byte := u8(sample & 0xFF)
-                        second_byte := u8((sample >> 8) & 0xFF)
-                        third_byte := u8((sample >> 16) & 0xFF)
-                        md5.update(md5_ctx, {first_byte, second_byte, third_byte})
-                    case 25..=32:
-                        data := transmute([4]u8)sample
-                        md5.update(md5_ctx, data[:])
-                    case:
-                        fmt.println("INVALID BPS")
-                        os.exit(1)
-                }
-            }
-        }
-    }
-
-    for subframe in subframes {
-        delete(subframe)
-    }
-
-    //
-    // Frame Footer
-    //
-    crc16_bytes := bytes.buffer_to_bytes(&crc_buffer)
-    frame_crc := u16(read_data(r, u16be) or_return)
-    calculated_frame_crc := calculate_crc16(crc16_bytes)
-
-    if frame_crc != calculated_frame_crc {
-        fmt.eprintfln("Expected frame CRC 0x%X, got 0x%X", frame_crc, calculated_frame_crc)
-        return .CRC_Mismatch
-    }
-
-    return nil
-}
-
-@(private)
 correlate :: proc(subframes: [][]i32, channel_assignment: ChannelAssignment) {
     // Undo Stereo Decorrelation
     #partial switch channel_assignment {
@@ -684,7 +430,7 @@ correlate :: proc(subframes: [][]i32, channel_assignment: ChannelAssignment) {
 }
 
 @(private)
-read_metadata :: proc(r: ^Reader, buffered := false, allocator := context.allocator) -> (flac: ^Flac, err: Error) {
+read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Flac, err: Error) {
     header := read_data(r, FlacHeader) or_return
     if header.magic != FLAC_MAGIC {
         return nil, .Invalid_Signature
@@ -731,25 +477,15 @@ read_metadata :: proc(r: ^Reader, buffered := false, allocator := context.alloca
             case .STREAMINFO:
                 // Do nothing, we already parse the mandatory streaminfo metadata
             case .PADDING:
-                if buffered {
-                    reader := cast(^bufio.Reader)r.data
-                    skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
-                } else {
-                    reader := cast(^bytes.Reader)r.data
-                    skipped := bytes.reader_seek(reader, i64(metadata_block_header.length), .Current) or_return
-                }
+                reader := cast(^bufio.Reader)r.data
+                skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
             case .APPLICATION:
                 //app_id := read_slice(&r, 4) or_return
                 //fmt.println("Found application with ID:", string(app_id))
                 //fmt.printfln("Skipping %d bytes of application metadata block", metadata_block_header.length)
                 // TODO: handle the application data
-                if buffered {
-                    reader := cast(^bufio.Reader)r.data
-                    skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
-                } else {
-                    reader := cast(^bytes.Reader)r.data
-                    skipped := bytes.reader_seek(reader, i64(metadata_block_header.length), .Current) or_return
-                }
+                reader := cast(^bufio.Reader)r.data
+                skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
             case .SEEKTABLE:
                 seekpoints := metadata_block_header.length / 18
                 //fmt.printfln("we have %d seekpoints", seekpoints)
@@ -833,22 +569,12 @@ read_metadata :: proc(r: ^Reader, buffered := false, allocator := context.alloca
                 append(&pictures, picture)
             case .INVALID:
                 fmt.eprintln("Invalid block type")
-                if buffered {
-                    reader := cast(^bufio.Reader)r.data
-                    skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
-                } else {
-                    reader := cast(^bytes.Reader)r.data
-                    skipped := bytes.reader_seek(reader, i64(metadata_block_header.length), .Current) or_return
-                }
+                reader := cast(^bufio.Reader)r.data
+                skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
             case:
                 fmt.printfln("Skipping %d bytes of Unknown metadata block", metadata_block_header.length)
-                if buffered {
-                    reader := cast(^bufio.Reader)r.data
-                    skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
-                } else {
-                    reader := cast(^bytes.Reader)r.data
-                    skipped := bytes.reader_seek(reader, i64(metadata_block_header.length), .Current) or_return
-                }
+                reader := cast(^bufio.Reader)r.data
+                skipped := bufio.reader_discard(reader, int(metadata_block_header.length)) or_return
         }
     }
 
@@ -1140,67 +866,10 @@ md5sum :: proc(md5_ctx: ^md5.Context, flac: ^Flac) -> Error {
     return nil
 }
 
-// `load_from_bytes` takes a byte slice and initializes a bitreader for it.
-// The data is expected to be a full flac stream.
-load_from_bytes :: proc(data: []byte, options := Options{}, allocator := context.allocator) -> (flac: ^Flac, err: Error) {
-    context.allocator = allocator
-
-    byte_r: bytes.Reader
-    bytes.reader_init(&byte_r, data)
-
-    r := Reader{bytes.reader_to_stream(&byte_r), 0, 0, 0}
-
-    flac = read_metadata(&r) or_return
-    if .only_return_metadata in options {
-        return flac, nil
-    }
-
-    md5_ctx: md5.Context
-    md5.init(&md5_ctx)
-    defer md5.reset(&md5_ctx)
-
-    for {
-        err = decode_frame(&r, flac, &md5_ctx, options)
-        if err != nil {
-            if err == .EOF {
-                break
-            } else {
-                return flac, err
-            }
-        }
-    }
-
-    if err != .EOF {
-        return flac, err
-    }
-
-    if .skip_md5_check not_in options {
-        md5sum(&md5_ctx, flac) or_return
-    }
-
-    return flac, nil
-}
-
-// `load_from_file` reads the entire file to memory and operates on the returned byte slice.
-// Only use this with small files.
-load_from_file :: proc(filename: string, options := Options{}, allocator := context.allocator) -> (flac: ^Flac, err: Error) {
-    context.allocator = allocator
-
-    data, ok := os.read_entire_file(filename)
-    defer delete(data)
-
-    if ok {
-        return load_from_bytes(data, options)
-    } else {
-        return nil, .Unable_To_Read_File
-    }
-}
-
-
-// `load_from_file_buffered` initializes a buffered reader for the file and reads all the metadata blocks.
+// `load_from_file` initializes a buffered reader for the file and reads all the metadata blocks.
 // Calls to `read_next_frame()` MUST be made to decode the audio data.
 // This is the recommended way to read most FLAC files as it has a minimal memory overhead.
-load_from_file_buffered :: proc(filename: string, allocator := context.allocator) -> (flac: ^Flac, r: ^Reader, err: Error) {
+load_from_file :: proc(filename: string, allocator := context.allocator) -> (flac: ^Flac, r: ^Reader, err: Error) {
     context.allocator = allocator
 
     file, open_err := os.open(filename)
@@ -1218,14 +887,13 @@ load_from_file_buffered :: proc(filename: string, allocator := context.allocator
     r.x = 0
     r.n = 0
 
-    flac = read_metadata(r, true) or_return
+    flac = read_metadata(r) or_return
 
     return flac, r, nil
 }
 
 /* `destroy` cleans up and frees the memory allocated by all 3 loading functions.
- The returned reader from `load_from_file_buffered` MUST be passed to `destroy` in order to close the file handle.
- `load_from_file` and `load_from_bytes` may pass nil as the reader.
+ The returned reader from `load_from_file` MUST be passed to `destroy` in order to close the file handle.
  ---
  The allocator that was used when loading the flac file MUST be passed to `destroy` in order to properly free
  the memory, otherwise a bad free may occur and crash the program.
