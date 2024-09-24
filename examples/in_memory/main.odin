@@ -33,6 +33,7 @@ main :: proc() {
         fmt.eprintln("Failed to initialize audio device: ", alsa.strerror(alsa_err))
         os.exit(1)
     }
+	defer alsa.pcm_close(handle)
 
     start := time.now()
     flac_data, err := flac.load_from_file(os.args[1], allocator = allocator)
@@ -55,6 +56,7 @@ main :: proc() {
     }
 
     converted_samples := make([]i16, len(flac_data.samples))
+	defer delete(converted_samples)
 
     for sample, i in flac_data.samples {
         new_sample := sample & 0xFF
@@ -73,7 +75,6 @@ main :: proc() {
     if alsa_err < 0 {
         fmt.eprintln("pcm_drain failed with:", alsa.strerror(alsa_err))
     }
-    alsa.pcm_close(handle)
 
     elapsed := time.diff(start, end)
     fmt.println("Decoding took", elapsed)

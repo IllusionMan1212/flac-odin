@@ -1,7 +1,6 @@
-//+private
+#+private
 package flac
 
-import "core:bytes"
 import "core:io"
 
 /* Basic byte and bit reader.
@@ -24,6 +23,7 @@ read_slice :: #force_inline proc(r: ^Reader, buf: []u8) -> io.Error {
 }
 
 read_data :: #force_inline proc(r: ^Reader, $T: typeid) -> (res: T, err: io.Error) {
+	// b is safe to return here because the proc is always inlined.
     b: [size_of(T)]byte
     read_slice(r, b[:]) or_return
 

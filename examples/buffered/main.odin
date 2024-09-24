@@ -77,12 +77,14 @@ main :: proc() {
         //  }
         //}
 
+		// 8 bps audio
         //converted_samples := make([]u8, len(samples))
         //defer delete(converted_samples)
         //for sample, i in samples {
         //    converted_samples[i] = u8(sample & 0xFF)
         //}
 
+		// 16 bps audio
         converted_samples := make([]i16, len(frame.samples))
         defer delete(converted_samples)
         for sample, i in frame.samples {

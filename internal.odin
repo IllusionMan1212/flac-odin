@@ -1,4 +1,4 @@
-//+private
+#+private
 package flac
 
 import "core:crypto/legacy/md5"

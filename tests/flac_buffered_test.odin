@@ -13,7 +13,6 @@ test_blocksize_4096_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -29,7 +28,6 @@ test_blocksize_4608_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -45,7 +43,6 @@ test_blocksize_16_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -61,7 +58,6 @@ test_blocksize_192_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -77,7 +73,6 @@ test_blocksize_254_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -93,7 +88,6 @@ test_blocksize_512_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -109,7 +103,6 @@ test_blocksize_725_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -125,7 +118,6 @@ test_blocksize_1000_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -141,7 +133,6 @@ test_blocksize_1937_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -157,7 +148,6 @@ test_blocksize_2304_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -173,7 +163,6 @@ test_partition_order_8_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -189,7 +178,6 @@ test_qlp_precision_15_bit_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -205,7 +193,6 @@ test_qlp_precision_2_bit_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -221,7 +208,6 @@ wasted_bits_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -237,7 +223,6 @@ only_verbatim_subframes_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -257,7 +242,6 @@ partition_order_8_containing_escaped_partitions_buffered :: proc(t: ^testing.T) 
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -273,7 +257,6 @@ all_fixed_orders_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -289,7 +272,6 @@ precision_search_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -305,7 +287,6 @@ samplerate_35467Hz_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -321,7 +302,6 @@ samplerate_39kHz_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -337,7 +317,6 @@ samplerate_22050Hz_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -353,7 +332,6 @@ _12_bit_per_sample_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -369,7 +347,6 @@ _8_bit_per_sample_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -391,7 +368,6 @@ variable_blocksize_file_created_with_flake_revision_264_buffered :: proc(t: ^tes
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -416,7 +392,6 @@ variable_blocksize_file_created_with_flake_revision_264_modified_to_create_small
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -438,7 +413,6 @@ variable_blocksize_file_created_with_CUETools_Flake_2_1_6_buffered :: proc(t: ^t
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -460,7 +434,6 @@ old_format_variable_blocksize_file_created_with_Flake_0_11_buffered :: proc(t: ^
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -476,7 +449,6 @@ high_resolution_audio_default_settings_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -492,7 +464,6 @@ high_resolution_audio_blocksize_16384_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -508,7 +479,6 @@ high_resolution_audio_blocksize_13456_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -530,7 +500,6 @@ high_resolution_audio_using_only_32nd_order_predictors_buffered :: proc(t: ^test
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -552,7 +521,6 @@ high_resolution_audio_partition_order_8_containing_escaped_partitions_buffered :
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -568,7 +536,6 @@ samplerate_192kHz_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -588,7 +555,6 @@ samplerate_192kHz_using_only_32nd_order_predictors_buffered :: proc(t: ^testing.
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -604,7 +570,6 @@ samplerate_134560Hz_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -620,7 +585,6 @@ samplerate_384kHz_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -636,7 +600,6 @@ _20_bit_per_sample_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -652,7 +615,6 @@ _3_channels_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -668,7 +630,6 @@ _4_channels_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -684,7 +645,6 @@ _5_channels_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -700,7 +660,6 @@ _6_channels_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -716,7 +675,6 @@ _7_channels_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -732,7 +690,6 @@ _8_channels_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -754,7 +711,6 @@ _8_channel_surround_192kHz_24_bit_using_only_32nd_order_predictors_buffered :: p
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -770,7 +726,6 @@ no_total_number_of_samples_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -786,7 +741,6 @@ no_min_max_framesize_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -802,7 +756,6 @@ only_streaminfo_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -818,7 +771,6 @@ extreme_large_seektable_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -834,7 +786,6 @@ extreme_large_padding_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -850,7 +801,6 @@ extreme_large_picture_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -866,7 +816,6 @@ extreme_large_vorbiscomment_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -882,7 +831,6 @@ extreme_large_application_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -898,7 +846,6 @@ cuesheet_with_very_many_indexes_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -914,7 +861,6 @@ _1000x_repeating_vorbiscomment_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -930,7 +876,6 @@ file_48_53_combined_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -946,7 +891,6 @@ jpg_picture_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -962,7 +906,6 @@ png_picture_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -978,7 +921,6 @@ gif_picture_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -994,7 +936,6 @@ avif_picture_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -1010,7 +951,6 @@ mono_audio_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -1026,7 +966,6 @@ predictor_overflow_check_16_bit_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -1042,7 +981,6 @@ predictor_overflow_check_20_bit_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -1058,7 +996,6 @@ predictor_overflow_check_24_bit_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -1074,7 +1011,6 @@ rice_partitions_with_escape_code_zero_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -1090,7 +1026,6 @@ uncommon_32_bit_per_sample_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}
@@ -1106,7 +1041,6 @@ uncommon_samplerate_768kHz_buffered :: proc(t: ^testing.T) {
 
 	for {
 		frame, f_err := flac.read_next_frame(r, data)
-		defer delete(frame.samples)
 		if f_err == .EOF {
 			break
 		}

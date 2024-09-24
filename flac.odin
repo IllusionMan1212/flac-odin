@@ -23,8 +23,8 @@ FlacError :: enum {
     Invalid_Coefficient_Precision,
     CRC_Mismatch,
     MD5_Mismatch,
-    Unsupported_BPS, // Remove when implemented
-    Unencoded_BPS_For_Fixed_Subframe_Is_Unsupported, // Remove when implemented
+    Unsupported_BPS, // TODO: Remove when implemented
+    Unencoded_BPS_For_Fixed_Subframe_Is_Unsupported, // TODO: Remove when implemented
     Invalid_Residual_Coding_Method,
     Invalid_Block_Size,
     Bits_Per_Second_Mismatch,
@@ -40,12 +40,12 @@ Option:
         Returns all metadata of a FLAC stream without decoding the audio data.
 */
 
-Option :: enum {
+Option :: enum u8 {
     skip_md5_check,
     only_return_metadata,
 }
 
-Options :: bit_set[Option]
+Options :: bit_set[Option; u8]
 
 PictureType :: enum u32 {
     OTHER,
@@ -73,6 +73,9 @@ PictureType :: enum u32 {
 
 Flac :: struct {
     metadata: FlacMetadata,
+    // When using the in-memory API this will hold all the decoded samples of the FLAC stream.
+    // When using the buffered API this will hold the samples up to the currently decoded frame. If all frames have
+    // been decoded then this will hold all the decoded samples.
     samples:  [dynamic]i32,
 }
 
@@ -102,6 +105,8 @@ Picture :: struct {
 Frame :: struct {
     channels: u8,
     sample_rate: u32,
+    // A slice of `Flac`'s `samples` field.
+    // Contains the frame's decoded samples.
     samples: []i32,
 }
 
@@ -720,7 +725,7 @@ read_metadata :: proc(r: ^Reader, buffered := false, allocator := context.alloca
             length     = u32(md_block_hdr & 0xFFFFFF),
         }
 
-        last_block = cast(bool)(metadata_block_header.last_block)
+        last_block = metadata_block_header.last_block
 
         switch metadata_block_header.type {
             case .STREAMINFO:
@@ -861,12 +866,16 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
 
     crc_buffer: Buffer
     // NOTE: using the default heap allocator here causes a use-after-free bug on files subset/05, subset/06, and subset/25
-    // No idea what the cause of the bug is. I am inclined to believe that it's a bug of the default heap allocator but
-    // maybe my code is fucking up the memory so bad it makes it seems that way.
+    // No idea what the cause of the bug is.
+    //
+    // Resolved without understanding the root issue. See below code for a note on this.
     buffer_init_allocator(&crc_buffer, 0, 128)
+    defer buffer_destroy(&crc_buffer)
 
     crc := buffer_to_stream(&crc_buffer)
     r := &Reader{
+        // TODO: tee reader's docs say we should call io.destroy() when done with it. But the tee reader
+        // doesn't implement the .Destroy method so it does absolutely nothing ?? Should ask about this in the discord.
         r = io.tee_reader_init(&tee_r, r, crc),
         buf = r.buf,
         x = r.x,
@@ -1049,12 +1058,13 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
 
     correlate(subframes, channel_assignment)
 
-    samples_arr := make([dynamic]i32, 0, block_size * 2)
+    start := len(flac.samples)
+
     // Write the samples interleaved.
     for i in 0..<len(subframes[0]) {
-        for subframe, sf in subframes {
+        for subframe in subframes {
             sample := subframe[i]
-            append(&samples_arr, sample)
+            append(&flac.samples, sample)
         }
     }
 
@@ -1062,7 +1072,7 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
         delete(subframe)
     }
 
-    frame.samples = samples_arr[:]
+    frame.samples = flac.samples[start:]
     frame.channels = frame_channels
     frame.sample_rate = actual_sample_rate_in_Hz
 
@@ -1070,8 +1080,15 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
     // Frame Footer
     //
     crc16_bytes := buffer_to_bytes(&crc_buffer)
-    frame_crc := u16(read_data(r, u16be) or_return)
+    // NOTE: The order of these two calls is important. If we're using the default heap allocator
+    // for crc_buffer and we call read_data before calculate_crc16 then we run into a memory bug.
+    // I'm still not sure the root cause of the bug but it disappears when they're in this order.
+    //
+    // In the below cases the bug doesn't happen and the order doesn't matter.
+    // When using the temp allocator or an arena allocator.
+    // When using the reader from the arguments instead of the tee reader.
     calculated_frame_crc := calculate_crc16(crc16_bytes)
+    frame_crc := u16(read_data(r, u16be) or_return)
 
     if frame_crc != calculated_frame_crc {
         fmt.eprintfln("Expected frame CRC 0x%X, got 0x%X", frame_crc, calculated_frame_crc)
@@ -1081,7 +1098,11 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
     return frame, nil
 }
 
+// `md5hash` updates the MD5 context with the hash of the provided samples.
+// Should be called for every decoded frame with its BPS and samples.
 md5hash :: proc(md5_ctx: ^md5.Context, bps: u8, samples: []i32) {
+    assert(1 <= bps && bps <= 32)
+
     for sample in samples {
         switch bps {
             case 1..=8:
@@ -1099,12 +1120,13 @@ md5hash :: proc(md5_ctx: ^md5.Context, bps: u8, samples: []i32) {
                 data := transmute([4]u8)sample
                 md5.update(md5_ctx, data[:])
             case:
-                fmt.println("INVALID BPS")
-                os.exit(1)
+                unreachable()
         }
     }
 }
 
+// `md5sum` writes the final MD5 checksum to the `flac` struct's `calculated_md5` field
+// and returns a MD5_Mismatch error in the case of a mismatch or nil.
 md5sum :: proc(md5_ctx: ^md5.Context, flac: ^Flac) -> Error {
     calculated_md5 := [16]byte{}
     md5.final(md5_ctx, calculated_md5[:])
