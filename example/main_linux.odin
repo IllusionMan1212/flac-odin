@@ -1,4 +1,4 @@
-package flac_example
+package flac_linux_example
 
 import "core:fmt"
 import "core:mem"
@@ -51,8 +51,12 @@ main :: proc() {
         os.exit(1)
     }
 
-    sample_rate := flac_data.metadata.sample_rate
+	// TODO: channel mapping is incorrect for anything with more than 2 channels.
     channels := flac_data.metadata.channels
+
+	chmap := alsa.pcm_get_chmap(handle)
+
+	fmt.println(chmap)
 
     md5_ctx: md5.Context
     md5.init(&md5_ctx)
@@ -67,20 +71,30 @@ main :: proc() {
             }
         }
 
-        //if frame.sample_rate != sample_rate || frame.channels != channels {
-        //  sample_rate = frame.sample_rate
-        //  channels = frame.channels
-        //  alsa_err = alsa.pcm_set_params(handle, .S16_LE, .RW_INTERLEAVED, u32(channels), sample_rate, 1, 0)
-        //  if alsa_err < 0 {
-        //      fmt.eprintln("Playback open error:", alsa.strerror(alsa_err))
-        //      os.exit(1)
-        //  }
-        //}
+        if frame.channels != channels {
+			// Finish playing the previous frame before changing the hw params.
+			alsa.pcm_drain(handle)
+
+			channels = frame.channels
+			alsa_err = alsa.pcm_set_params(handle, .S16_LE, .RW_INTERLEAVED, u32(channels), flac_data.metadata.sample_rate, 1, 500000)
+			if alsa_err < 0 {
+				fmt.eprintln("Playback open error:", alsa.strerror(alsa_err))
+				os.exit(1)
+			}
+        }
+
+		fmt.println("Channels:", frame.channels)
+
+		if frame.channels == 6 {
+			fmt.println("Sample:", len(frame.samples))
+		}
+
+		// TODO: resampling
 
 		// 8 bps audio
-        //converted_samples := make([]u8, len(samples))
+        //converted_samples := make([]u8, len(frame.samples))
         //defer delete(converted_samples)
-        //for sample, i in samples {
+        //for sample, i in frame.samples {
         //    converted_samples[i] = u8(sample & 0xFF)
         //}
 
@@ -102,19 +116,20 @@ main :: proc() {
 
         flac.md5hash(&md5_ctx, flac_data.metadata.bits_per_sample, frame.samples)
     }
-    end := time.now()
-
-    err = flac.md5sum(&md5_ctx, flac_data)
-    if err == .MD5_Mismatch {
-        fmt.println("Decoded audio data is not correct.")
-        os.exit(1)
-    }
 
     alsa_err = alsa.pcm_drain(handle)
     if alsa_err < 0 {
         fmt.eprintln("pcm_drain failed with:", alsa.strerror(alsa_err))
     }
     alsa.pcm_close(handle)
+
+    end := time.now()
+
+    err = flac.md5sum(&md5_ctx, flac_data)
+    if err == .MD5_Mismatch {
+        fmt.printfln("Decoded audio data is not correct. Expected MD5: %v, Got: %v", flac_data.metadata.expected_md5, flac_data.metadata.calculated_md5)
+        os.exit(1)
+    }
 
     elapsed := time.diff(start, end)
     fmt.println("Decoding took", elapsed)
