@@ -54,14 +54,10 @@ main :: proc() {
 	// TODO: channel mapping is incorrect for anything with more than 2 channels.
     channels := flac_data.metadata.channels
 
-	chmap := alsa.pcm_get_chmap(handle)
-
-	fmt.println(chmap)
-
     md5_ctx: md5.Context
     md5.init(&md5_ctx)
     for {
-        frame, err := flac.read_next_frame(reader, flac_data)
+        frame, err := flac.read_next_frame(reader, flac_data, allocator)
         if err != nil {
             if err == .EOF {
                 break
@@ -82,12 +78,6 @@ main :: proc() {
 				os.exit(1)
 			}
         }
-
-		fmt.println("Channels:", frame.channels)
-
-		if frame.channels == 6 {
-			fmt.println("Sample:", len(frame.samples))
-		}
 
 		// TODO: resampling
 

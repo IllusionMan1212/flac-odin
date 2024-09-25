@@ -591,10 +591,6 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
     tee_r: io.Tee_Reader
 
     crc_buffer: Buffer
-    // NOTE: using the default heap allocator here causes a use-after-free bug on files subset/05, subset/06, and subset/25
-    // No idea what the cause of the bug is.
-    //
-    // Resolved without understanding the root issue. See below code for a note on this.
     buffer_init_allocator(&crc_buffer, 0, 128)
     defer buffer_destroy(&crc_buffer)
 
@@ -806,13 +802,6 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
     // Frame Footer
     //
     crc16_bytes := buffer_to_bytes(&crc_buffer)
-    // NOTE: The order of these two calls is important. If we're using the default heap allocator
-    // for crc_buffer and we call read_data before calculate_crc16 then we run into a memory bug.
-    // I'm still not sure the root cause of the bug but it disappears when they're in this order.
-    //
-    // In the below cases the bug doesn't happen and the order doesn't matter.
-    // When using the temp allocator or an arena allocator.
-    // When using the reader from the arguments instead of the tee reader.
     calculated_frame_crc := calculate_crc16(crc16_bytes)
     frame_crc := u16(read_data(r, u16be) or_return)
 

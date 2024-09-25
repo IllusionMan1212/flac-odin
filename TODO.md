@@ -6,6 +6,7 @@ Files:-
 Playback issues in the example program that may relate to the decoder:-
 23 - Crunchy loud noise mixed with the actual audio data
 
+uncommon/02 -> 6 channel audio might be incorrect (not a decoder issue afaik)
 uncommon/04 -> We get a bits per sample mismatch
 uncommon/10 -> We error with Invalid Signature. I assume for these two I should look for the frame sync bits. But maybe my decoder should reject these. idk.
 uncommon/11 -> We error with Invalid Signature
@@ -34,8 +35,10 @@ Things:-
 [ ] Speed optimizations
 [ ] Seeking
 [ ] Fuzzing to test the stability of the code
-[ ] Check if the use-after-free bug happens on Windows, and if so, if the address sanitizer will show us the full stacktrace
+[x] Check if the use-after-free bug happens on Windows, and if so, if the address sanitizer will show us the full stacktrace
 	instead of skipping some procs.
+	This was caused by `read_data()` and the tee reader writing into the buffer and us using some memory that was freed while the buffer
+	resized. Solution is to use buffer data BEFORE calling `read_data()`
 
 [ ] Encoder (low priority for now)
 
