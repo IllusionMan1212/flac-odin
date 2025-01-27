@@ -6,7 +6,7 @@ import "core:crypto/legacy/md5"
 import "core:fmt"
 import "core:io"
 import "core:mem"
-import "core:os"
+import "core:os/os2"
 import "core:time"
 
 Error :: union {
@@ -69,8 +69,7 @@ PictureType :: enum u32 {
 
 Flac :: struct {
     metadata: FlacMetadata,
-    // This holds the samples up to the currently decoded frame. If all frames have
-    // been decoded then this will hold all the decoded samples.
+    // This holds the samples of the current frame.
     samples:  [dynamic]i32,
 }
 
@@ -94,14 +93,15 @@ Picture :: struct {
     height: u32,
     depth: u32,
     num_colors: u32,
-    data: []byte,
+    data: []byte `fmt:"-"`,
 }
 
 Frame :: struct {
     channels: u8,
     sample_rate: u32,
-    // A slice of `Flac`'s `samples` field.
+    // A slice view of `Flac`'s `samples` field.
     // Contains the frame's decoded samples.
+    // DO NOT FREE.
     samples: []i32,
 }
 
@@ -436,6 +436,12 @@ read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Fla
         return nil, .Invalid_Signature
     }
 
+	if (header.streaminfo.min_block_size < 16 || header.streaminfo.min_block_size > 65535)  ||
+		(header.streaminfo.max_block_size < 16 || header.streaminfo.max_block_size > 65535) ||
+		(header.streaminfo.min_block_size > header.streaminfo.max_block_size) {
+		return nil, .Invalid_Block_Size
+	}
+
     sample_rate := header.streaminfo.sr_chan_bps_ts >> 44
     num_channel_minus_one := (header.streaminfo.sr_chan_bps_ts >> 41) & 7
     bits_per_sample_minus_one := (header.streaminfo.sr_chan_bps_ts >> 36) & 0x1F
@@ -583,7 +589,7 @@ read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Fla
     return flac, nil
 }
 
-read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator) -> (frame: Frame, err: Error) {
+decode_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator) -> (frame: Frame, err: Error) {
     //
     // Frame Header
     //
@@ -652,6 +658,14 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
             return {}, .Invalid_Block_Size
     }
 
+    // TODO: Any frame but the last one MUST have a block size equal to or greater
+    // than the minimum block size and MUST have a block size equal to or
+    // less than the maximum block size.  The last frame MUST have a block
+    // size equal to or less than the maximum block size; it does not have
+    // to comply to the minimum block size because the block size of that
+    // frame must be able to accommodate the length of the audio data the
+    // stream contains
+    //
     //if actual_block_size < 15 && !last_frame {
         // TODO: block sizes less than 16 are only valid for the last frame and MUST NOT be used for any other frame.
     //}
@@ -780,7 +794,7 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
 
     correlate(subframes, channel_assignment)
 
-    start := len(flac.samples)
+    clear(&flac.samples)
 
     // Write the samples interleaved.
     for i in 0..<len(subframes[0]) {
@@ -794,7 +808,7 @@ read_next_frame :: proc(r: ^Reader, flac: ^Flac, allocator := context.allocator)
         delete(subframe)
     }
 
-    frame.samples = flac.samples[start:]
+    frame.samples = flac.samples[:]
     frame.channels = frame_channels
     frame.sample_rate = actual_sample_rate_in_Hz
 
@@ -861,14 +875,14 @@ md5sum :: proc(md5_ctx: ^md5.Context, flac: ^Flac) -> Error {
 load_from_file :: proc(filename: string, allocator := context.allocator) -> (flac: ^Flac, r: ^Reader, err: Error) {
     context.allocator = allocator
 
-    file, open_err := os.open(filename)
-    if open_err != os.ERROR_NONE {
+    file, open_err := os2.open(filename)
+    if open_err != nil {
         fmt.eprintln(open_err)
         return nil, {}, .Unable_To_Read_File
     }
 
     br := new(bufio.Reader)
-    bufio.reader_init(br, os.stream_from_handle(file))
+    bufio.reader_init(br, os2.to_stream(file))
 
     r = new(Reader)
     r.r = bufio.reader_to_stream(br)

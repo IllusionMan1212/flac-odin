@@ -240,6 +240,7 @@ CueSheetTrackIndex :: struct #packed {
     reserved:           [3]byte,
 }
 
+@(optimization_mode="favor_size")
 decode_extended_utf8 :: proc(r: ^Reader) -> (decoded_num: u64, err: Error) {
     MASKX :: 0b0011_1111
     MASK2 :: 0b0001_1111

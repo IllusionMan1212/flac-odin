@@ -13,15 +13,6 @@ uncommon/11 -> We error with Invalid Signature
 
 faulty/01 -> This one works when it shouldn't (Wrong max blocksize)
 faulty/02 -> This one works when it shouldn't (Wrong max framesize)
-faulty/04 -> This one works when it shouldn't. This one has a wrong number of channels (whatever that means)
-			 Each frame has to be played by itself, otherwise plays sped up.
-faulty/05 -> This one works when it shouldn't. (Wrong number of samples)
-			 This should be fine to decode and play.
-faulty/08 -> This one works when it shouldn't. (Blocksize 65536, exceeds the allowed max of 65535)
-			 We should error here. We segfault currently.
-faulty/09 -> This one works when it shouldn't. (Blocksize 1, below the allowed min of 16 (only the last frame is allowed to have less than 16))
-			 We should error here. We play correctly currently.
-faulty/11 -> We return an error now, but we should just warn and decode the audio fine.
 
 Things:-
 [ ] Options
@@ -33,6 +24,7 @@ Things:-
 [ ] Lots of checks (look at the TODOs in flac.odin)
 [x] Memory optimizations
 [ ] Speed optimizations
+	- Does this matter? So far I haven't found a FLAC file that lags while playing or stalls the audio device even without `-o:speed`
 [ ] Seeking
 [ ] Fuzzing to test the stability of the code
 [x] Check if the use-after-free bug happens on Windows, and if so, if the address sanitizer will show us the full stacktrace

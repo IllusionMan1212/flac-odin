@@ -33,15 +33,19 @@ main :: proc() {
         fmt.eprintln("Failed to alloc memory")
         return
     }
-    allocator := virtual.arena_allocator(&arena)
+    //allocator := virtual.arena_allocator(&arena)
+
+    track: mem.Tracking_Allocator
+    mem.tracking_allocator_init(&track, context.allocator)
+    defer mem.tracking_allocator_destroy(&track)
+    context.allocator = mem.tracking_allocator(&track)
 
     start := time.now()
-    flac_data, reader, err := flac.load_from_file(os.args[1], allocator)
+    flac_data, reader, err := flac.load_from_file(os.args[1], context.allocator)
     if err != nil {
         fmt.println("Error while reading flac file:", err)
         os.exit(1)
     }
-    defer flac.destroy(flac_data, reader, allocator)
 
     fmt.println(flac_data)
 
@@ -57,7 +61,7 @@ main :: proc() {
     md5_ctx: md5.Context
     md5.init(&md5_ctx)
     for {
-        frame, err := flac.read_next_frame(reader, flac_data, allocator)
+        frame, err := flac.decode_next_frame(reader, flac_data, context.allocator)
         if err != nil {
             if err == .EOF {
                 break
@@ -123,4 +127,20 @@ main :: proc() {
 
     elapsed := time.diff(start, end)
     fmt.println("Decoding took", elapsed)
+
+    flac.destroy(flac_data, reader, context.allocator)
+
+    for _, leak in track.allocation_map {
+        fmt.printfln("%v leaked %m", leak.location, leak.size)
+    }
+    
+    for bad_free in track.bad_free_array {
+        fmt.printfln("%v allocation %p was freed badly", bad_free.location, bad_free.memory)
+    }
+    
+    fmt.printfln("Peak Mem: %m", track.peak_memory_allocated)
+    fmt.printfln("Total Mem: %m", track.total_memory_allocated)
+    fmt.printfln("Current Mem: %m", track.current_memory_allocated)
+    fmt.printfln("Total Allocs: %v, Total Frees: %v:", track.total_allocation_count, track.total_free_count)
+    fmt.printfln("Total Mem Free'd: %m", track.total_memory_freed)
 }
