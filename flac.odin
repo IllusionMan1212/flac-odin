@@ -1,6 +1,5 @@
 package flac
 
-import "core:bytes"
 import "core:bufio"
 import "core:crypto/legacy/md5"
 import "core:fmt"

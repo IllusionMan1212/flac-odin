@@ -15,6 +15,10 @@ faulty/01 -> This one works when it shouldn't (Wrong max blocksize)
 faulty/02 -> This one works when it shouldn't (Wrong max framesize)
 
 Things:-
+[ ] Seeking to arbitrary samples
+	- bufio `Reader` doesn't implement `.Seek` but the underlying `io.Stream` which is just a file DOES implement
+	  `.Seek` so I think bufio `Reader` should have Seeking capabilities too as long as the underlying Reader supports it.
+	  I could hack something together to (dis)prove this.
 [ ] Options
 	- [x] Vorbis comment data
 	- [ ] Cuesheet ?
