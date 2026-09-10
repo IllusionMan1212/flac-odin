@@ -212,10 +212,10 @@ CueSheet :: struct #packed {
     media_catalog_num:   [128]byte,
     num_lead_in_samples: u64be,
     using _:             bit_field u8 {
-        reserved:     u8   | 7,
+        reserved_1:     u8   | 7,
         compact_disc: bool | 1,
     },
-    reserved:            [258]byte,
+    reserved_2:            [258]byte,
     num_tracks:          u8,
 }
 
@@ -225,11 +225,11 @@ CueSheetTrack :: struct #packed {
     track_num:              u8,
     ISRC:                   [12]byte,
     using _:                bit_field u8 {
-        reserved:     u8        | 6,
+        reserved_1:     u8        | 6,
         pre_emphasis: bool      | 1,
         track_type:   TrackType | 1,
     },
-    reserved:               [13]byte,
+    reserved_2:               [13]byte,
     num_track_index_points: u8,
 }
 
