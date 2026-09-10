@@ -3,6 +3,7 @@ package flac_test
 import "core:fmt"
 import "core:os"
 import "core:testing"
+import "core:crypto/legacy/md5"
 import "shared:flac"
 
 @(test)
@@ -12,7 +13,7 @@ test_blocksize_4096 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Read Blocksize 4096 metadata Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -27,7 +28,7 @@ test_blocksize_4608 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 4608 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -42,7 +43,7 @@ test_blocksize_16 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 16 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -57,7 +58,7 @@ test_blocksize_192 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 192 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -72,7 +73,7 @@ test_blocksize_254 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 254 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -87,7 +88,7 @@ test_blocksize_512 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 512 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -102,7 +103,7 @@ test_blocksize_725 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 725 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -117,7 +118,7 @@ test_blocksize_1000 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 1000 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -132,7 +133,7 @@ test_blocksize_1937 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 1937 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -147,7 +148,7 @@ test_blocksize_2304 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Blocksize 2304 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -162,7 +163,7 @@ test_partition_order_8 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Partition order 8 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -177,7 +178,7 @@ test_qlp_precision_15_bit :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("qlp precision 15 bit Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -192,7 +193,7 @@ test_qlp_precision_2_bit :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("qlp precision 2 bit Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -207,7 +208,7 @@ wasted_bits :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Wasted bits Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -222,7 +223,7 @@ only_verbatim_subframes :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Only verbatim subframes Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -241,7 +242,7 @@ partition_order_8_containing_escaped_partitions :: proc(t: ^testing.T) {
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -256,7 +257,7 @@ all_fixed_orders :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("All fixed orders Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -271,7 +272,7 @@ precision_search :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Precision search Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -286,7 +287,7 @@ samplerate_35467Hz :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Samplerate 35467Hz Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -301,7 +302,7 @@ samplerate_39kHz :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Samplerate 39kHz Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -316,7 +317,7 @@ samplerate_22050Hz :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Samplerate 22050Hz Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -331,7 +332,7 @@ _12_bit_per_sample :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("12 bit per sample Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -346,7 +347,7 @@ _8_bit_per_sample :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("8 bit per sample Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -367,7 +368,7 @@ variable_blocksize_file_created_with_flake_revision_264 :: proc(t: ^testing.T) {
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -391,7 +392,7 @@ variable_blocksize_file_created_with_flake_revision_264_modified_to_create_small
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -412,7 +413,7 @@ variable_blocksize_file_created_with_CUETools_Flake_2_1_6 :: proc(t: ^testing.T)
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -433,7 +434,7 @@ old_format_variable_blocksize_file_created_with_Flake_0_11 :: proc(t: ^testing.T
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -448,7 +449,7 @@ high_resolution_audio_default_settings :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("High resolution audio, default settings Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -463,7 +464,7 @@ high_resolution_audio_blocksize_16384 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("High resolution audio, blocksize 16384 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -478,7 +479,7 @@ high_resolution_audio_blocksize_13456 :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("High resolution audio, blocksize 13456 Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -499,7 +500,7 @@ high_resolution_audio_using_only_32nd_order_predictors :: proc(t: ^testing.T) {
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -520,7 +521,7 @@ high_resolution_audio_partition_order_8_containing_escaped_partitions :: proc(t:
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -535,7 +536,7 @@ samplerate_192kHz :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Samplerate 192kHz Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -554,7 +555,7 @@ samplerate_192kHz_using_only_32nd_order_predictors :: proc(t: ^testing.T) {
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -569,7 +570,7 @@ samplerate_134560Hz :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Samplerate 134560Hz Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -584,7 +585,7 @@ samplerate_384kHz :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Samplerate 384kHz Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -599,7 +600,7 @@ _20_bit_per_sample :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("20 bit per sample Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -614,7 +615,7 @@ _3_channels :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("3 channels Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -629,7 +630,7 @@ _4_channels :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("4 channels Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -644,7 +645,7 @@ _5_channels :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("5 channels Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -659,7 +660,7 @@ _6_channels :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("6 channels Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -674,7 +675,7 @@ _7_channels :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("7 channels Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -689,7 +690,7 @@ _8_channels :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("8 channels Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -710,7 +711,7 @@ _8_channel_surround_192kHz_24_bit_using_only_32nd_order_predictors :: proc(t: ^t
     )
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -725,7 +726,7 @@ no_total_number_of_samples :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("No total number of samples Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -740,7 +741,7 @@ no_min_max_framesize :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("No min-max framesize Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -755,7 +756,7 @@ only_streaminfo :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Only STREAMINFO Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -770,7 +771,7 @@ extreme_large_seektable :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Extremely large SEEKTABLE Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -785,7 +786,7 @@ extreme_large_padding :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Extremely large PADDING Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -800,7 +801,7 @@ extreme_large_picture :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Extremely large PICTURE Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -815,7 +816,7 @@ extreme_large_vorbiscomment :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Extremely large VORBISCOMMENT Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -830,7 +831,7 @@ extreme_large_application :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Extremely large APPLICATION Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -845,7 +846,7 @@ cuesheet_with_very_many_indexes :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("CUESHEET with very many indexes Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -860,7 +861,7 @@ _1000x_repeating_vorbiscomment :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("1000x repeating VORBSICOMMENT Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -875,7 +876,7 @@ file_48_53_combined :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("File 48-53 combined Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -890,7 +891,7 @@ jpg_picture :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("JPG PICTURE Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -905,7 +906,7 @@ png_picture :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("PNG PICTURE Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -920,7 +921,7 @@ gif_picture :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("GIF PICTURE Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -935,7 +936,7 @@ avif_picture :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("AVIF PICTURE Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -950,7 +951,7 @@ mono_audio :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Mono audio Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -965,7 +966,7 @@ predictor_overflow_check_16_bit :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Predictor overflow check, 16-bit Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -980,7 +981,7 @@ predictor_overflow_check_20_bit :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Predictor overflow check, 20-bit Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -995,7 +996,7 @@ predictor_overflow_check_24_bit :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Predictor overflow check, 24-bit Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -1010,11 +1011,34 @@ rice_partitions_with_escape_code_zero :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Rice partitions with escape code zero Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
 		testing.expect(t, f_err == nil, fmt.tprint("Decoding Rice partitions with escape code zero frame Failed with error:", f_err))
+	}
+}
+
+@(test)
+uncommon_changing_samplerate :: proc(t: ^testing.T) {
+	data, r, err := flac.load_from_file("flac-test-files/uncommon/01 - changing samplerate.flac")
+	defer flac.destroy(data, r)
+	testing.expect(t, err == nil, fmt.tprint("Uncommon changing samplerate Failed with error:", err))
+
+    md5_ctx: md5.Context
+    md5.init(&md5_ctx)
+
+	for {
+		frame, f_err := flac.decode_next_frame(r, data)
+		if f_err == .EOF {
+			break
+		}
+		flac.md5hash(&md5_ctx, data.metadata.bits_per_sample, frame.samples)
+		testing.expect(t, f_err == nil, fmt.tprintf("Decoding Uncommon changing samplerate frame Failed with error:", f_err))
+	}
+
+	if data.metadata.expected_md5 != 0 {
+		testing.expect(t, flac.md5sum(&md5_ctx, data) == nil, fmt.tprintf("Incorrect MD5 hash. Expected %v. Got %v", data.metadata.expected_md5, data.metadata.calculated_md5))
 	}
 }
 
@@ -1025,7 +1049,7 @@ uncommon_32_bit_per_sample :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Uncommon 32bps audio Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}
@@ -1040,7 +1064,7 @@ uncommon_samplerate_768kHz :: proc(t: ^testing.T) {
     testing.expect(t, err == nil, fmt.tprint("Uncommon samplerate 768kHz Failed with error:", err))
 
 	for {
-		frame, f_err := flac.read_next_frame(r, data)
+		frame, f_err := flac.decode_next_frame(r, data)
 		if f_err == .EOF {
 			break
 		}

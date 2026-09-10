@@ -1,4 +1,4 @@
-package flac_linux_example
+package flac_linux_alsa_example
 
 import "core:fmt"
 import "core:mem"

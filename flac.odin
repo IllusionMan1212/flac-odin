@@ -5,8 +5,7 @@ import "core:crypto/legacy/md5"
 import "core:fmt"
 import "core:io"
 import "core:mem"
-import "core:os/os2"
-import "core:time"
+import "core:os"
 
 Error :: union {
     io.Error,
@@ -69,6 +68,7 @@ PictureType :: enum u32 {
 Flac :: struct {
     metadata: FlacMetadata,
     // This holds the samples of the current frame.
+	// TODO: Should this be deleted? every frame already holds its own samples data
     samples:  [dynamic]i32,
 }
 
@@ -869,19 +869,19 @@ md5sum :: proc(md5_ctx: ^md5.Context, flac: ^Flac) -> Error {
 }
 
 // `load_from_file` initializes a buffered reader for the file and reads all the metadata blocks.
-// Calls to `read_next_frame()` MUST be made to decode the audio data.
+// Calls to `decode_next_frame()` MUST be made to decode the audio data.
 // This is the recommended way to read most FLAC files as it has a minimal memory overhead.
 load_from_file :: proc(filename: string, allocator := context.allocator) -> (flac: ^Flac, r: ^Reader, err: Error) {
     context.allocator = allocator
 
-    file, open_err := os2.open(filename)
+    file, open_err := os.open(filename)
     if open_err != nil {
         fmt.eprintln(open_err)
         return nil, {}, .Unable_To_Read_File
     }
 
     br := new(bufio.Reader)
-    bufio.reader_init(br, os2.to_stream(file))
+    bufio.reader_init(br, os.to_stream(file))
 
     r = new(Reader)
     r.r = bufio.reader_to_stream(br)
