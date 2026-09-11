@@ -1,4 +1,3 @@
-#+private
 package flac
 
 import "core:io"
@@ -6,6 +5,8 @@ import "core:io"
 /* Basic byte and bit reader.
  Uses core:bytes reader under the hood with a few useful procedures for reading structs and other types.
 */
+// Public because load_from_file hands one back; everything else in this file
+// stays package-private.
 Reader :: struct {
     using r: io.Stream,
     // Temporary read buffer.
@@ -33,6 +34,7 @@ read_data :: #force_inline proc(r: ^Reader, $T: typeid) -> (res: T, err: io.Erro
 // Read reads and returns the next n bits, at most 64. It buffers bits up to the
 // next byte boundary.
 // Borrowed from https://github.com/mewkiz/flac
+@(private)
 read_bits :: proc(r: ^Reader, n: uint) -> (res: u64, err: io.Error) #no_bounds_check {
     if n == 0 {
         return 0, nil
@@ -86,6 +88,7 @@ read_bits :: proc(r: ^Reader, n: uint) -> (res: u64, err: io.Error) #no_bounds_c
     return res, nil
 }
 
+@(private)
 align_to_byte :: proc(r: ^Reader) {
     r.x = 0
     r.n = 0

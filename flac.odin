@@ -429,7 +429,16 @@ correlate :: proc(subframes: [][]i32, channel_assignment: ChannelAssignment) {
 }
 
 @(private)
-read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Flac, err: Error) {
+read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (out_flac: ^Flac, err: Error) {
+    context.allocator = allocator
+
+    /* Held in a local rather than in the named result: an Odin `defer` cannot
+     change a named result, so the unwind below is able to free this but not to
+     nil it out for the caller. Assigning it only on the successful return means
+     every error path hands back nil instead of a freed pointer.
+    */
+    flac: ^Flac
+
     header := read_data(r, FlacHeader) or_return
     if header.magic != FLAC_MAGIC {
         return nil, .Invalid_Signature
@@ -453,7 +462,7 @@ read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Fla
     }
 
     if streaminfo_header.type != .STREAMINFO {
-        return flac, .Missing_StreamInfo
+        return nil, .Missing_StreamInfo
     }
 
     if flac == nil {
@@ -467,6 +476,30 @@ read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Fla
     flac.metadata.expected_md5 = header.streaminfo.md5
 
     pictures := make([dynamic]Picture, 0, 2, allocator)
+
+    /* Everything allocated from here on hangs off `flac`, and a caller that gets
+     an error back is handed a nil `flac` -- so it has nothing to pass to
+     `destroy` and cannot clean any of this up itself. Unwind it here instead.
+     Each block below therefore hands its allocations to `flac` or to `pictures`
+     as soon as they exist, before the next read that could fail.
+    */
+    defer if err != nil {
+        for picture in pictures {
+            delete(picture.mimetype)
+            delete(picture.description)
+            delete(picture.data)
+        }
+        delete(pictures)
+
+        for comment in flac.metadata.vorbis_comments {
+            delete(comment)
+        }
+        delete(flac.metadata.vorbis_comments)
+        delete(flac.metadata.vendor_name)
+
+        free(flac)
+    }
+
     last_block := streaminfo_header.last_block
     for !last_block {
         md_block_hdr := read_data(r, u32be) or_return
@@ -506,26 +539,33 @@ read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Fla
                     fmt.eprintfln("Expected size: %d, Got %d", metadata_block_header.length, actual_size)
                 }
             case .VORBIS_COMMENT:
+                // A stream may carry more than one of these; the last one wins,
+                // so release the previous block rather than orphaning it.
+                for comment in flac.metadata.vorbis_comments {
+                    delete(comment)
+                }
+                delete(flac.metadata.vorbis_comments)
+                delete(flac.metadata.vendor_name)
+                flac.metadata.vorbis_comments = nil
+                flac.metadata.vendor_name = ""
+
                 vendor_name_len := read_data(r, u32le) or_return
                 vendor_name_slice := make([]byte, vendor_name_len)
+                flac.metadata.vendor_name = string(vendor_name_slice)
                 read_slice(r, vendor_name_slice) or_return
-                vendor_name := string(vendor_name_slice)
                 user_comment_list_len := read_data(r, u32le) or_return
 
                 actual_size := 4 + vendor_name_len + 4
 
                 comments := make([]string, user_comment_list_len)
+                flac.metadata.vorbis_comments = comments
                 for i in 0..<user_comment_list_len {
                     comment_len := read_data(r, u32le) or_return
                     comment_slice := make([]byte, comment_len)
+                    comments[i] = string(comment_slice)
                     read_slice(r, comment_slice) or_return
-                    comment := string(comment_slice)
                     actual_size += 4 + comment_len
-
-                    comments[i] = comment
                 }
-                flac.metadata.vorbis_comments = comments
-                flac.metadata.vendor_name = vendor_name
                 if metadata_block_header.length != u32(actual_size) {
                     fmt.eprintln("Vorbis metadata header length mismatch!")
                     fmt.eprintfln("Expected size: %d, Got %d", metadata_block_header.length, actual_size)
@@ -537,7 +577,7 @@ read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Fla
                 cuesheet := read_data(r, CueSheet) or_return
                 if cuesheet.num_tracks < 1 {
                     // TODO: should this be a warning instead of an error that halts the decoding?
-                    return flac, .Missing_Lead_Out_Track
+                    return nil, .Missing_Lead_Out_Track
                 }
                 //fmt.println(cuesheet)
                 for i in 0..<cuesheet.num_tracks {
@@ -551,15 +591,20 @@ read_metadata :: proc(r: ^Reader, allocator := context.allocator) -> (flac: ^Fla
             case .PICTURE:
                 pic_type := PictureType(read_data(r, u32be) or_return)
                 mime_len := read_data(r, u32be) or_return
+                // These three are only reachable through `pictures` once the
+                // append below runs, so they need their own unwind until then.
                 mimetype_slice := make([]byte, mime_len)
+                defer if err != nil {delete(mimetype_slice)}
                 read_slice(r, mimetype_slice) or_return
                 mimetype := string(mimetype_slice)
                 desc_len := read_data(r, u32be) or_return
                 desc_slice := make([]byte, desc_len)
+                defer if err != nil {delete(desc_slice)}
                 read_slice(r, desc_slice) or_return
                 desc := string(desc_slice)
                 metadata := read_data(r, PictureMetadata) or_return
                 data := make([]byte, metadata.data_len)
+                defer if err != nil {delete(data)}
                 read_slice(r, data) or_return
                 picture := Picture{
                     type = pic_type,
@@ -877,25 +922,39 @@ load_from_file :: proc(filename: string, allocator := context.allocator) -> (fla
     file, open_err := os.open(filename)
     if open_err != nil {
         fmt.eprintln(open_err)
-        return nil, {}, .Unable_To_Read_File
+        return nil, nil, .Unable_To_Read_File
     }
 
     br := new(bufio.Reader)
     bufio.reader_init(br, os.to_stream(file))
 
-    r = new(Reader)
-    r.r = bufio.reader_to_stream(br)
-    r.buf = 0
-    r.x = 0
-    r.n = 0
+    reader := new(Reader)
+    reader.r = bufio.reader_to_stream(br)
+    reader.buf = 0
+    reader.x = 0
+    reader.n = 0
 
-    flac = read_metadata(r) or_return
+    /* Without this an unreadable file in a scanned library burns an fd and the
+     reader's 4 KB buffer on every attempt -- the caller is handed nil for both
+     results and so has no handle to close the file with.
+     `reader` is a local for the same reason `read_metadata` keeps one: a defer
+     cannot nil out the named result, so `r` is only assigned on success.
+    */
+    defer if err != nil {
+        bufio.reader_destroy(br)
+        free(br)
+        free(reader)
+        os.close(file)
+    }
 
-    return flac, r, nil
+    flac = read_metadata(reader) or_return
+
+    return flac, reader, nil
 }
 
 /* `destroy` cleans up and frees the memory allocated by all 3 loading functions.
  The returned reader from `load_from_file` MUST be passed to `destroy` in order to close the file handle.
+ Both arguments may be nil, so it is safe to defer immediately after a load.
  ---
  The allocator that was used when loading the flac file MUST be passed to `destroy` in order to properly free
  the memory, otherwise a bad free may occur and crash the program.
@@ -903,21 +962,25 @@ load_from_file :: proc(filename: string, allocator := context.allocator) -> (fla
 destroy :: proc(flac: ^Flac, r: ^Reader = nil, allocator := context.allocator) {
     context.allocator = allocator
 
-    delete(flac.samples)
-    for picture in flac.metadata.pictures {
-        delete(picture.mimetype)
-        delete(picture.data)
-        delete(picture.description)
-    }
-    delete(flac.metadata.pictures)
+    // Tolerates a nil `flac` so a caller can `defer destroy(...)` straight after
+    // a load without first checking whether the load succeeded.
+    if flac != nil {
+        delete(flac.samples)
+        for picture in flac.metadata.pictures {
+            delete(picture.mimetype)
+            delete(picture.data)
+            delete(picture.description)
+        }
+        delete(flac.metadata.pictures)
 
-    for comment in flac.metadata.vorbis_comments {
-        delete(comment)
-    }
-    delete(flac.metadata.vorbis_comments)
-    delete(flac.metadata.vendor_name)
+        for comment in flac.metadata.vorbis_comments {
+            delete(comment)
+        }
+        delete(flac.metadata.vorbis_comments)
+        delete(flac.metadata.vendor_name)
 
-    free(flac)
+        free(flac)
+    }
 
     if r != nil {
         br := cast(^bufio.Reader)r.data
